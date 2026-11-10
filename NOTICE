@@ -1,0 +1,21 @@
+TPMS RX
+Copyright 2026
+
+This product is an overlay app for the F4HWN firmware for the Quansheng
+UV-K1 and UV-K5 V3 radios:
+
+  https://github.com/armel/uv-k1-k5v3-firmware-custom
+
+It is built against the overlay-app SDK of that firmware (app_api.h,
+app_overlay.h, app_assets.py, pack_app.py), Copyright 2026 Armel F4HWN,
+licensed under the Apache License, Version 2.0. The SDK files are not
+included in this repository; tools/fetch_sdk.py downloads them.
+
+build.sh and app.ld are based on the build script and linker script of the
+F4HWN overlay apps.
+
+The standalone repository layout and GitHub Actions workflow follow the
+pattern of Temp 433 (https://github.com/Maciekbac/temp433).
+
+Frame layouts follow the device notes of rtl_433
+(https://github.com/merbanan/rtl_433), used as a specification only.

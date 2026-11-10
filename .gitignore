@@ -1,0 +1,7 @@
+# SDK fetched by tools/fetch_sdk.py
+/sdk/
+
+# Build outputs
+/build/
+
+__pycache__/

@@ -13,18 +13,32 @@ Europe share an app. The United States and Canada share another.
 
 ## Which app
 
-| App | Where | Starts on | Cars | Signal |
-|---|---|---|---|---|
-| `TPMS EU` | UK and Europe | 433.92 MHz | Ford, Toyota, Schrader MRXGG4 | FSK and OOK |
-| `TPMS NA` | United States and Canada | 315 MHz | Ford, Toyota, Schrader MRXGG4 | FSK and OOK |
-| `TPMS EU2` | UK and Europe | 433.92 MHz | Vauxhall, Opel, Saab; BMW and Mini with the Schrader sensor | OOK |
-| `TPMS NA2` | United States and Canada | 315 MHz | Chevrolet and other GM; Subaru; Nissan and Infiniti | OOK |
+| App | Where | Default band | Default mode | Cars | Signal |
+|---|---|---|---|---|---|
+| `TPMS EU` | UK and Europe | 433.92 MHz | FSK | Ford, Toyota, Schrader MRXGG4 | FSK and OOK |
+| `TPMS NA` | United States and Canada | 315 MHz | FSK | Ford, Toyota, Schrader MRXGG4 | FSK and OOK |
+| `TPMS EU2` | UK and Europe | 433.92 MHz (fixed) | OOK (fixed) | Vauxhall, Opel, Saab; BMW and Mini with the Schrader sensor | OOK |
+| `TPMS NA2` | United States and Canada | 315 MHz | OOK (fixed) | Chevrolet and other GM; Subaru; Nissan and Infiniti | OOK |
 
-`TPMS EU` and `TPMS NA` listen for the same three sensors. The difference is
-the frequency a new install starts on.
+### Defaults and what you can change
 
-The `2` key still switches between 315.00 and 433.92 MHz. The choice is
-remembered.
+Each app loads its regional default band and demod on first install. Changes
+you make are remembered, except where a setting is fixed because every sensor
+in that app uses the same value.
+
+| App | Band (`2` / menu) | Mode (`*` / menu) |
+|---|---|---|
+| `TPMS EU` | Starts 433.92; toggle 315 / 433.92; remembered | Starts FSK; cycle FSK / OOK / AUTO; remembered |
+| `TPMS NA` | Starts 315; toggle 315 / 433.92; remembered | Starts FSK; cycle FSK / OOK / AUTO; remembered |
+| `TPMS EU2` | Fixed 433.92; no band control | Fixed OOK; no mode control |
+| `TPMS NA2` | Starts 315; toggle 315 / 433.92; remembered | Fixed OOK; no mode control |
+
+`TPMS EU` and `TPMS NA` listen for the same three sensors. The only first-launch
+difference is the default frequency (433.92 vs 315).
+
+`TPMS EU2` locks both band and mode: Vauxhall, Opel, Saab, BMW, and Mini on
+that app are all 433.92 MHz OOK. `TPMS NA2` locks mode to OOK (Chevrolet/GM,
+Subaru, Nissan) but still lets you change band, defaulting to 315 MHz.
 
 Newer BMW and Mini sensors that use FSK are not decoded. `TPMS EU2` covers
 the older Schrader sensor (often called MRXBC5A4 or MRXBMW433), including the
@@ -40,10 +54,10 @@ If `TPMS EU` or `TPMS NA` stays on Listening, try the second app for that region
 ## What every app does
 
 - Up to seven live rows. A repeat of the same sensor updates its row.
-- Band: 315.00 or 433.92 MHz.
-- Demod: FSK, OOK, or AUTO. AUTO listens to each for about 2.5 seconds, and
-  holds the one that just decoded for 10 seconds. `TPMS EU2` and `TPMS NA2`
-  start on OOK, which is the signal those cars use.
+- Band: 315.00 or 433.92 MHz, except `TPMS EU2`, which is fixed at 433.92 MHz.
+- Demod: FSK, OOK, or AUTO on `TPMS EU` and `TPMS NA`. AUTO listens to each
+  for about 2.5 seconds, and holds the one that just decoded for 10 seconds.
+  `TPMS EU2` and `TPMS NA2` are OOK only (no mode control).
 - Options menu (`MENU`). The backlight stays on for 10 seconds after the last
   key, or stays off. The list stays on the screen.
 - Receive only.
@@ -76,13 +90,11 @@ On F4HWN Labs, load and manage overlay apps in the browser at
 
 ## Keys
 
-The keys are the same in every app.
-
 | Key | Action |
 |---|---|
 | `MENU` | Open the options menu. Inside the menu, cycle the selected item |
-| `2` | Toggle 315.00 / 433.92 MHz |
-| `*` | Cycle demod: FSK, OOK, AUTO |
+| `2` | Toggle 315.00 / 433.92 MHz. No effect in `TPMS EU2` |
+| `*` | Cycle demod: FSK, OOK, AUTO. No effect in `TPMS EU2` or `TPMS NA2` |
 | `0` | Turn the backlight off. The screen stays drawn. Any key lights it again for 10 seconds. `EXIT` still quits |
 | `EXIT` | Quit (from the listen screen) or close the menu |
 
@@ -90,9 +102,13 @@ The keys are the same in every app.
 
 | Item | Values |
 |---|---|
-| `BAND` | `315.00` / `433.92` |
-| `MODE` | `FSK` / `OOK` / `AUTO` |
+| `BAND` | `315.00` / `433.92`. Not shown in `TPMS EU2` |
+| `MODE` | `FSK` / `OOK` / `AUTO`. Not shown in `TPMS EU2` or `TPMS NA2` |
 | `CLEAR` | Wipe the seven live rows |
+
+`TPMS EU2` lists `CLEAR` only (fixed 433.92 OOK). `TPMS NA2` lists `BAND` and
+`CLEAR` (OOK fixed; band still changeable, default 315). `TPMS EU` and
+`TPMS NA` list all three items.
 
 `UP` / `DOWN` (on the UV-K1, the navigation keys) move the selection. `MENU`,
 `*`, `2`, or `5` change the item. `EXIT` closes the menu.

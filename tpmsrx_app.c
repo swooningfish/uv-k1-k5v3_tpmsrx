@@ -45,9 +45,25 @@ void *memset(void *d, int c, size_t n)
 #define PREF_AUTO      2u
 #define AUTO_DWELL_MS  2500u
 #define AUTO_HOLD_MS   10000u
+/* EU2: fixed 433.92 OOK. NA2: OOK only, band still changeable. EU/NA: both free. */
+#if defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
+#define TPMS_LOCK_MODE 1
+#else
+#define TPMS_LOCK_MODE 0
+#endif
+#if defined(TPMS_FLAVOUR_EU2)
+#define TPMS_LOCK_BAND 1
+#define MENU_CLR       0u
+#elif defined(TPMS_FLAVOUR_NA2)
+#define TPMS_LOCK_BAND 0
+#define MENU_BAND      0u
+#define MENU_CLR       1u
+#else
+#define TPMS_LOCK_BAND 0
 #define MENU_BAND      0u
 #define MENU_MODE      1u
 #define MENU_CLR       2u
+#endif
 #define DISP_OFF       1u
 #define DISP_TMO       2u
 #define DISP_IDLE_MS   10000u
@@ -269,18 +285,31 @@ static void drawMenu(const char *ui)
 {
     char str[28];
     char *o;
+#if defined(TPMS_FLAVOUR_EU2)
+    const uint16_t labels[1] = { T_CLR };
+#elif defined(TPMS_FLAVOUR_NA2)
+    const uint16_t labels[2] = { T_BAND, T_CLR };
+#else
     const uint16_t labels[3] = { T_BAND, T_MODE, T_CLR };
+#endif
     for (uint8_t i = 0; i < MENU_ITEMS; i++) {
         o = str;
         *o++ = (i == g.menuSel) ? '>' : ' ';
         o = put(o, ui + labels[i]);
-        *o++ = ' ';
-        if (i == MENU_BAND) o = putBand(o);
+#if !TPMS_LOCK_BAND
+        if (i == MENU_BAND) {
+            *o++ = ' ';
+            o = putBand(o);
+        }
+#endif
+#if !TPMS_LOCK_MODE
         else if (i == MENU_MODE) {
+            *o++ = ' ';
             if (g.cfg.pref == PREF_AUTO) o = put(o, ui + T_AUTO);
             else if (g.cfg.pref == PREF_OOK) o = put(o, ui + T_OOK);
             else o = put(o, ui + T_FSK);
         }
+#endif
         *o = '\0';
         /* Capsules like CW Keyer help: selected row is the full-width mark. */
         g.A->print_inverse(str, 2, (uint8_t)(i + 1u), false, true,
@@ -352,6 +381,7 @@ static void draw(const char *ui)
     }
 }
 
+#if !TPMS_LOCK_MODE
 static void cyclePref(dectpms_t *dec)
 {
     if (g.cfg.pref == PREF_FSK) g.cfg.pref = PREF_OOK;
@@ -362,24 +392,32 @@ static void cyclePref(dectpms_t *dec)
     dectpms_init(dec, activePath());
     g.autoAt = g.A->ticks_ms();
 }
+#endif
 
 static void menuChange(dectpms_t *dec)
 {
     switch (g.menuSel) {
+#if !TPMS_LOCK_BAND
         case MENU_BAND:
             g.cfg.band433 ^= 1u;
             applyRf();
             dectpms_init(dec, activePath());
             break;
+#endif
+#if !TPMS_LOCK_MODE
         case MENU_MODE:
             cyclePref(dec);
             break;
+#endif
         case MENU_CLR:
             g.nRows = 0;
             break;
         default:
             break;
     }
+#if TPMS_LOCK_BAND && TPMS_LOCK_MODE
+    (void)dec;
+#endif
 }
 
 static bool handleKey(uint8_t key, dectpms_t *dec)
@@ -418,14 +456,18 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             g.menu = 1;
             g.menuSel = 0;
             break;
+#if !TPMS_LOCK_BAND
         case APP_KEY_2:
             g.cfg.band433 ^= 1u;
             applyRf();
             dectpms_init(dec, activePath());
             break;
+#endif
+#if !TPMS_LOCK_MODE
         case APP_KEY_STAR:
             cyclePref(dec);
             break;
+#endif
         case APP_KEY_0:
             g.cfg.disp = DISP_OFF;
             g.blOff = 1;
@@ -550,6 +592,8 @@ void app_main(const app_api_t *api)
     api->af_capture_open();
     r43 = api->bk_read(REG_43);
 
+    /* Defaults per flavour (first launch). Saved band/mode are restored when
+     * present, then lock flags below force OOK / 433.92 where the sensors need it. */
     api->cfg_load(cfg, 4);
     if (cfg[0] == CFG_MAGIC || cfg[0] == 0xB1u) {
         g.cfg.band433 = cfg[1] ? 1u : 0u;
@@ -558,18 +602,21 @@ void app_main(const app_api_t *api)
         if (cfg[0] == CFG_MAGIC && cfg[3] == DISP_OFF) g.cfg.disp = DISP_OFF;
     } else {
 #if defined(TPMS_FLAVOUR_NA) || defined(TPMS_FLAVOUR_NA2)
-        g.cfg.band433 = 0u;
+        g.cfg.band433 = 0u; /* 315.00 MHz */
 #else
-        g.cfg.band433 = 1u;
+        g.cfg.band433 = 1u; /* 433.92 MHz */
 #endif
-#if defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
+#if TPMS_LOCK_MODE
         g.cfg.pref = PREF_OOK;
 #else
         g.cfg.pref = PREF_FSK;
 #endif
     }
-#if defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
+#if TPMS_LOCK_MODE
     g.cfg.pref = PREF_OOK;
+#endif
+#if TPMS_LOCK_BAND
+    g.cfg.band433 = 1u;
 #endif
     if (g.cfg.disp == DISP_OFF) g.blOff = 1;
     else api->backlight_on();

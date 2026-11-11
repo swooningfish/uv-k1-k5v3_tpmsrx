@@ -59,5 +59,8 @@ for name, value in UI:
     ui_size += len(value) + 1 + pad
 a.const("UI_SIZE", ui_size)
 a.const("T_TITLE_CHARS", len(TITLE))
-a.const("MENU_ITEMS", 3)
+# EU2: CLEAR only (fixed 433.92 OOK). NA2: BAND+CLEAR (OOK locked, band free).
+# EU/NA: BAND+MODE+CLEAR.
+_flavour = os.environ.get("FLAVOUR", "eu")
+a.const("MENU_ITEMS", {"eu2": 1, "na2": 2}.get(_flavour, 3))
 a.main()

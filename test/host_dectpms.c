@@ -114,6 +114,58 @@ static void test_schrader(void)
     expect(!tpms_parse_schrader(b, &o), "schrader bad crc");
 }
 
+static void test_eg53(void)
+{
+    uint8_t b[10] = {0x01, 0x02, 0x03, 0x04, 0xAB, 0xCD, 0xEF, 132, 68, 0};
+    unsigned sum = 0;
+    tpms_pkt_t o;
+    for (int i = 0; i < 9; i++) sum += b[i];
+    b[9] = (uint8_t)sum;
+    expect(tpms_parse_eg53(b, &o), "eg53 valid");
+    expect(o.model == TPMS_EG53, "eg53 model");
+    expect(o.id == 0x00ABCDEFu, "eg53 id");
+    expect(o.psi == 48, "eg53 psi");
+    expect(o.temp_c == 20, "eg53 temp");
+    b[9] ^= 1u;
+    expect(!tpms_parse_eg53(b, &o), "eg53 bad checksum");
+}
+
+static void test_bmw(void)
+{
+    /* 200 kPa, temp byte 70 -> 20 C. The two check bits have to be a fixed point. */
+    uint8_t b[6] = {0x02, 0x01, 0x8A, 0xCC, 0x86, 0x30};
+    tpms_pkt_t o;
+    expect(tpms_parse_bmw(b, &o), "bmw valid");
+    expect(o.model == TPMS_BMW, "bmw model");
+    expect(o.id == 0x00100C56u, "bmw id");
+    expect(o.psi == 29, "bmw psi");
+    expect(o.temp_c == 20, "bmw temp");
+    b[1] ^= 0xffu;
+    expect(!tpms_parse_bmw(b, &o), "bmw bad check");
+}
+
+static void test_nis(void)
+{
+    uint8_t b[5] = {0x71, 0x23, 0x45, 0x68, 0};
+    tpms_pkt_t o;
+    int xx;
+    for (xx = 0; xx < 4; xx++) {
+        int sum = 0;
+        b[4] = (uint8_t)(xx << 2);
+        for (int i = 0; i < 5; i++)
+            sum += (b[i] & 3) + ((b[i] >> 2) & 3) + ((b[i] >> 4) & 3) + ((b[i] >> 6) & 3);
+        if ((sum & 3) == 1) break;
+    }
+    expect(xx < 4, "nis checksum found");
+    expect(tpms_parse_nis(b, &o), "nis valid");
+    expect(o.model == TPMS_NISS, "nis model");
+    expect(o.id == 0x00123456u, "nis id");
+    expect(o.psi == 32, "nis psi");
+    expect(o.temp_c == (int16_t)TPMS_NO_TEMP, "nis no temp");
+    b[0] ^= 0xffu;
+    expect(!tpms_parse_nis(b, &o), "nis bad check");
+}
+
 static void test_conversions(void)
 {
     /* Ford high-pressure bit 0x20 adds 0x100 to psibits. */
@@ -139,6 +191,9 @@ int main(void)
     test_ford();
     test_toyota();
     test_schrader();
+    test_eg53();
+    test_bmw();
+    test_nis();
     test_conversions();
     if (fails) {
         printf("%d test(s) failed\n", fails);

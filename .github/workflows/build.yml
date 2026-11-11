@@ -29,12 +29,14 @@ jobs:
 
       - name: Summary
         run: |
-          echo "TPMSRX.app: $(wc -c < build/tpmsrx.bin) B of 4096 B code" >> "$GITHUB_STEP_SUMMARY"
+          for f in build/tpms_*.bin; do
+            echo "$f: $(wc -c < "$f") B of 4096 B code" >> "$GITHUB_STEP_SUMMARY"
+          done
 
       - uses: actions/upload-artifact@v7
         with:
           name: TPMSRX
-          path: build/TPMSRX.app
+          path: build/*.app
           retention-days: 30
           if-no-files-found: error
 
@@ -58,14 +60,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ ! -f TPMSRX.app ]; then
-            found=$(find . -name TPMSRX.app -print -quit)
-            cp "$found" TPMSRX.app
+          shopt -s nullglob
+          apps=(*.app)
+          if [ ${#apps[@]} -eq 0 ]; then
+            while IFS= read -r found; do
+              cp "$found" .
+            done < <(find . -name '*.app' -print)
+            apps=(*.app)
           fi
-          # GitHub rejects a release asset whose name ends in .app.
-          zip -q TPMSRX.zip TPMSRX.app
+          zips=()
+          for app in "${apps[@]}"; do
+            base=$(basename "$app" .app)
+            # GitHub rejects a release asset whose name ends in .app.
+            zip -q "$base.zip" "$app"
+            zips+=("$base.zip")
+          done
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" TPMSRX.zip --clobber
+            gh release upload "$GITHUB_REF_NAME" "${zips[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" TPMSRX.zip --generate-notes
+            gh release create "$GITHUB_REF_NAME" "${zips[@]}" --generate-notes
           fi

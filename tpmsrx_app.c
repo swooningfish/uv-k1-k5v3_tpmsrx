@@ -27,8 +27,12 @@ void *memset(void *d, int c, size_t n)
 #define REG_43_WIDE    0x7E2Cu
 #define REG_47         0x47
 #define REG_47_BYPASS  0x6942u
+#define REG_33         0x33
 #define REG_38         0x38
 #define REG_39         0x39
+/* BK4819_ToggleGpioOut: bit is 0x40 >> pin. GPIO3 UHF = 3, GPIO4 VHF = 4. */
+#define LNA_UHF        0x0008u
+#define LNA_VHF        0x0004u
 #define FREQ_315       31500000u
 #define FREQ_433       43392000u
 #define KEY_EVERY      1536u
@@ -139,14 +143,29 @@ static uint8_t activePath(void)
     return TPMS_MODE_FSK;
 }
 
+/* REG_33 is the whole GPIO word (RX enable, PA, both LNAs, both LEDs).
+ * Change the LNA only when a write reads back, so a write-only register
+ * is left on the VFO's antenna path. */
+static void selectUhfLna(void)
+{
+    uint16_t cur = g.A->bk_read(REG_33);
+    uint16_t n;
+    g.A->bk_write(REG_33, cur);
+    if (g.A->bk_read(REG_33) != cur) return;
+    n = (uint16_t)((cur | LNA_UHF) & (uint16_t)~LNA_VHF);
+    g.A->bk_write(REG_33, n);
+    if (g.A->bk_read(REG_33) != n) g.A->bk_write(REG_33, cur);
+}
+
 static void applyRf(void)
 {
     uint32_t f = g.cfg.band433 ? FREQ_433 : FREQ_315;
     uint8_t path = activePath();
     g.A->bk_write(REG_38, (uint16_t)(f & 0xFFFFu));
     g.A->bk_write(REG_39, (uint16_t)(f >> 16));
+    /* tones_off_rx latches the PLL and forces AF mute. Demod writes follow. */
+    g.A->tones_off_rx();
     if (path == TPMS_MODE_FSK) {
-        g.A->set_af(APP_AF_FM);
         g.A->bk_write(REG_2B, (uint16_t)((g.A->bk_read(REG_2B) | 0x0700u) & ~0x0007u));
         g.A->bk_write(REG_73, (uint16_t)(g.A->bk_read(REG_73) | 0x0010u));
         g.A->bk_write(REG_43, REG_43_WIDE);
@@ -155,7 +174,7 @@ static void applyRf(void)
         g.A->set_af(APP_AF_AM);
         g.A->bk_write(REG_43, REG_43_WIDE);
     }
-    g.A->tones_off_rx();
+    selectUhfLna();
     g.A->audio_path(false);
 }
 
@@ -170,9 +189,24 @@ static void setPath(uint8_t path, dectpms_t *dec)
 
 static const char *modelName(uint8_t m, const char *ui)
 {
+#if TPMS_HAVE_FSK
     if (m == TPMS_FORD) return ui + T_FORD;
     if (m == TPMS_TOYT) return ui + T_TOYT;
-    return ui + T_SCHR;
+#endif
+#if TPMS_HAVE_SCHR
+    if (m == TPMS_SCHR) return ui + T_SCHR;
+#endif
+#if TPMS_HAVE_EG53
+    if (m == TPMS_EG53) return ui + T_EG53;
+#endif
+#if TPMS_HAVE_BMW
+    if (m == TPMS_BMW) return ui + T_BMW;
+#endif
+#if TPMS_HAVE_NIS
+    if (m == TPMS_NISS) return ui + T_NISS;
+#endif
+    (void)m;
+    return ui;
 }
 
 static void upsert(const tpms_pkt_t *p, int16_t rssi)
@@ -505,9 +539,20 @@ void app_main(const app_api_t *api)
         else g.cfg.pref = cfg[2] ? PREF_OOK : PREF_FSK;
         if (cfg[0] == CFG_MAGIC && cfg[3] == DISP_OFF) g.cfg.disp = DISP_OFF;
     } else {
+#if defined(TPMS_FLAVOUR_NA) || defined(TPMS_FLAVOUR_NA2)
+        g.cfg.band433 = 0u;
+#else
         g.cfg.band433 = 1u;
+#endif
+#if defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
+        g.cfg.pref = PREF_OOK;
+#else
         g.cfg.pref = PREF_FSK;
+#endif
     }
+#if defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
+    g.cfg.pref = PREF_OOK;
+#endif
     if (g.cfg.disp == DISP_OFF) g.blOff = 1;
     else api->backlight_on();
     g.path = (g.cfg.pref == PREF_OOK) ? TPMS_MODE_OOK : TPMS_MODE_FSK;

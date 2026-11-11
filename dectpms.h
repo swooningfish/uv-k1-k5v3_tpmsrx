@@ -4,8 +4,30 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-enum { TPMS_FORD = 0, TPMS_TOYT = 1, TPMS_SCHR = 2 };
+enum {
+    TPMS_FORD = 0, TPMS_TOYT = 1, TPMS_SCHR = 2,
+    TPMS_EG53 = 3, TPMS_BMW = 4, TPMS_NISS = 5
+};
 enum { TPMS_MODE_FSK = 0, TPMS_MODE_OOK = 1 };
+
+/* One firmware image is one flavour. The host test builds every parser. */
+#if !defined(TPMS_FLAVOUR_EU) && !defined(TPMS_FLAVOUR_NA) && \
+    !defined(TPMS_FLAVOUR_EU2) && !defined(TPMS_FLAVOUR_NA2)
+#define TPMS_HOST_ALL 1
+#endif
+#if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU) || defined(TPMS_FLAVOUR_NA)
+#define TPMS_HAVE_FSK 1
+#define TPMS_HAVE_SCHR 1
+#endif
+#if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
+#define TPMS_HAVE_EG53 1
+#endif
+#if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU2)
+#define TPMS_HAVE_BMW 1
+#endif
+#if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_NA2)
+#define TPMS_HAVE_NIS 1
+#endif
 
 #define TPMS_NO_TEMP (-32768)
 
@@ -20,6 +42,9 @@ typedef struct {
 bool tpms_parse_ford(const uint8_t b[8], tpms_pkt_t *out);
 bool tpms_parse_toyota(const uint8_t b[9], tpms_pkt_t *out);
 bool tpms_parse_schrader(const uint8_t b[8], tpms_pkt_t *out);
+bool tpms_parse_eg53(const uint8_t b[10], tpms_pkt_t *out);
+bool tpms_parse_bmw(const uint8_t b[6], tpms_pkt_t *out);
+bool tpms_parse_nis(const uint8_t b[5], tpms_pkt_t *out);
 
 /* Sample-rate demodulator. FS = 38400. */
 typedef struct {

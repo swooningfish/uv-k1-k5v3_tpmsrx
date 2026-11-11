@@ -63,10 +63,16 @@ If `TPMS EU` or `TPMS NA` stays on Waiting, try the second app for that region.
    zip: `TPMSEU.zip`, `TPMSNA.zip`, `TPMSEU2.zip`, `TPMSNA2.zip`. A
    [workflow artifact](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/actions)
    is the raw `.app`.
-2. In UV Studio, open Apps, connect the radio, and install the `.app` from a
-   local file.
+2. Open [UV Studio Apps](https://armel.github.io/uvstudio/#apps), connect the
+   radio (F4HWN Labs), and install the `.app` from a local file into a free
+   slot.
 3. On the radio, open the Apps menu (`F` then `7`), select the app name from
    the table, and press `MENU`.
+
+## UV Studio
+
+On F4HWN Labs, load and manage overlay apps in the browser at
+[UV Studio Apps](https://armel.github.io/uvstudio/#apps).
 
 ## Keys
 

@@ -12,4 +12,4 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
 fi
 
 docker run --rm -v "$PWD":/work -w /work "$IMAGE" \
-    bash -lc 'python3 tools/fetch_sdk.py && ./build.sh && ./test/run_tests.sh'
+    bash -lc 'python3 tools/fetch_sdk.py && bash ./build.sh && bash ./test/run_tests.sh'

@@ -18,7 +18,7 @@ model, id, pressure, temperature, RSSI, and age. There is no packet history.
 - Band: **315.00** or **433.92** MHz.
 - Demod: **FSK**, **OOK**, or **AUTO** (dwells ~2.5 s each; a decode holds the
   path for 10 s).
-- Options menu (`MENU`). The display blanks after 10 seconds, or stays off.
+- Options menu (`MENU`). The backlight stays on for 10 seconds after the last key, or stays off. The sensor list remains on screen.
 - Receive only: the app never transmits.
 
 ## Requirements
@@ -44,7 +44,7 @@ model, id, pressure, temperature, RSSI, and age. There is no packet history.
 | `MENU` | Open the options menu. Inside the menu, cycle the selected item |
 | `2` | Toggle 315.00 / 433.92 MHz |
 | `*` | Cycle demod: FSK → OOK → AUTO |
-| `0` | Blank the LCD now (display off) and let the backlight time out. Any key wakes into the 10 second timeout. `EXIT` still quits |
+| `0` | Turn the backlight off. The screen stays drawn. Any key lights it again for 10 seconds. `EXIT` still quits |
 | `EXIT` | Quit (from the listen screen) or close the menu |
 
 ### Options menu
@@ -53,11 +53,11 @@ model, id, pressure, temperature, RSSI, and age. There is no packet history.
 |---|---|
 | `BAND` | `315.00` / `433.92` |
 | `MODE` | `FSK` / `OOK` / `AUTO` |
-| `DISP` | `OFF` / `10s` (blank 10 seconds after the last key) |
+| `DISP` | `OFF` / `10s` (backlight off 10 seconds after the last key; the text stays) |
 | `CLEAR` | Wipe the seven live rows |
 
 `UP` / `DOWN` (UV-K1: nav) move the selection. `MENU`, `*`, `2`, or `5` change the item. `EXIT` closes the menu.
-A valid decode blinks the green LED twice (also while the display is blank).
+A valid decode blinks the green LED twice (also while the backlight is off).
 
 ## Screen
 

@@ -67,7 +67,7 @@ typedef struct {
 
 static struct {
     const app_api_t *A;
-    uint8_t prevKey, led, nRows, refresh, menu, menuSel, asleep, path;
+    uint8_t prevKey, led, nRows, refresh, menu, menuSel, blOff, path;
     uint16_t ledCnt, keyCnt;
     int16_t rssi;
     uint32_t autoAt, lastHit, lastKey;
@@ -262,14 +262,6 @@ static void draw(const char *ui)
     char *o;
     uint32_t now = g.A->ticks_ms();
 
-    if (g.asleep && !g.menu) {
-        g.A->display_clear();
-        g.A->status_clear();
-        g.A->blit_status();
-        g.A->blit_full();
-        return;
-    }
-
     g.A->display_clear();
     drawStatus(ui);
 
@@ -329,11 +321,11 @@ static void menuChange(dectpms_t *dec)
         case MENU_DISP:
             if (g.cfg.disp == DISP_OFF) {
                 g.cfg.disp = DISP_TMO;
-                g.asleep = 0;
+                g.blOff = 0;
                 g.lastKey = g.A->ticks_ms();
             } else {
                 g.cfg.disp = DISP_OFF;
-                g.asleep = 1;
+                g.blOff = 1;
                 g.menu = 0;
             }
             break;
@@ -348,9 +340,9 @@ static void menuChange(dectpms_t *dec)
 static bool handleKey(uint8_t key, dectpms_t *dec)
 {
     g.lastKey = g.A->ticks_ms();
-    if (g.asleep && !g.menu) {
+    if (g.blOff && !g.menu) {
         if (key == APP_KEY_EXIT) return true;
-        g.asleep = 0;
+        g.blOff = 0;
         if (g.cfg.disp == DISP_OFF) g.cfg.disp = DISP_TMO;
         if (key == APP_KEY_0) return false; /* toggle consumed as wake */
         /* fall through so other keys still act */
@@ -391,7 +383,7 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             break;
         case APP_KEY_0:
             g.cfg.disp = DISP_OFF;
-            g.asleep = 1;
+            g.blOff = 1;
             break;
         default:
             break;
@@ -399,11 +391,18 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
     return false;
 }
 
+static bool backlightHeld(void)
+{
+    /* Menu stays lit. 10s holds the light after the last key. OFF releases it. */
+    if (g.menu) return true;
+    return g.cfg.disp == DISP_TMO && !g.blOff;
+}
+
 static bool serviceDisp(void)
 {
-    if (g.cfg.disp != DISP_TMO || g.menu || g.asleep) return false;
+    if (g.cfg.disp != DISP_TMO || g.menu || g.blOff) return false;
     if ((uint32_t)(g.A->ticks_ms() - g.lastKey) < DISP_IDLE_MS) return false;
-    g.asleep = 1;
+    g.blOff = 1;
     return true;
 }
 
@@ -441,7 +440,7 @@ static void listen(const char *ui)
             g.led = 2u;
             g.ledCnt = 0;
             g.A->led(true);
-            wantUi = !g.asleep;
+            wantUi = true;
             dectpms_rearm(&dec);
         }
 
@@ -466,15 +465,18 @@ static void listen(const char *ui)
             wantUi = true;
         }
 
-        if (wantUi || (!g.asleep && ++g.refresh >= REFRESH_POLLS)) {
+        /* Tick the resident backlight every poll. Holding re-arms it; releasing
+           lets the radio countdown turn the light off. The LCD stays drawn. */
+        g.A->backlight_update();
+        if (backlightHeld()) g.A->backlight_on();
+
+        if (wantUi || ++g.refresh >= REFRESH_POLLS) {
             g.refresh = 0;
-            if (!g.asleep || g.menu) g.rssi = g.A->rssi_dbm();
+            g.rssi = g.A->rssi_dbm();
             g.A->battery_sample();
             draw(ui);
             g.A->blit_status();
             g.A->blit_full();
-            if (g.asleep && !g.menu) g.A->backlight_update();
-            else g.A->backlight_on();
             wantUi = false;
             next = clk() + CYC_PER_SAMPLE;
         }
@@ -495,13 +497,12 @@ void app_main(const app_api_t *api)
     g.prevKey = APP_KEY_INVALID;
     g.nRows = 0;
     g.menu = 0;
-    g.asleep = 0;
+    g.blOff = 0;
     g.cfg.disp = DISP_TMO;
     api->led(false);
     api->asset_read(0, ui, UI_SIZE);
 
     api->af_capture_open();
-    api->backlight_on();
     r43 = api->bk_read(REG_43);
 
     api->cfg_load(cfg, 4);
@@ -514,7 +515,8 @@ void app_main(const app_api_t *api)
         g.cfg.band433 = 1u;
         g.cfg.pref = PREF_FSK;
     }
-    if (g.cfg.disp == DISP_OFF) g.asleep = 1;
+    if (g.cfg.disp == DISP_OFF) g.blOff = 1;
+    else api->backlight_on();
     g.path = (g.cfg.pref == PREF_OOK) ? TPMS_MODE_OOK : TPMS_MODE_FSK;
 
     applyRf();

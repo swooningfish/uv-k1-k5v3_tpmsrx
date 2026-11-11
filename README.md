@@ -35,7 +35,7 @@ on screen is the Nissan reading. A Subaru sensor reads about a quarter high.
 Chevrolet and GM use a different sensor, shown as `EG53`, and that pressure
 is not affected.
 
-If `TPMS EU` or `TPMS NA` stays on Waiting, try the second app for that region.
+If `TPMS EU` or `TPMS NA` stays on Listening, try the second app for that region.
 
 ## What every app does
 
@@ -104,7 +104,10 @@ A valid decode blinks the green LED, including while the backlight is off.
 The status line shows `TPMS` (or `MENU`) on the left, and the band and demod
 just left of the battery.
 
-![Waiting for a sensor](docs/waiting.png)
+While no sensors have been heard, the screen shows the car types for that
+flavour, the demod each group needs (`FSK` or `OOK`), and the region.
+
+![Listening for a sensor](docs/main_screen.png)
 
 ![A few sensors](docs/list.png)
 

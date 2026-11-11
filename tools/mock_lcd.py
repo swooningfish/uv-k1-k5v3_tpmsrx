@@ -98,12 +98,19 @@ def status(fb, title, band):
     battery(fb)
 
 
+def center(fb, y, s):
+    text(fb, max(0, (W - len(s) * 4) // 2), y, s)
+
+
 def scene_waiting():
     fb = new_fb()
     status(fb, "TPMS", "433.92 FSK")
-    text(fb, 40, 8 + 28, "WAITING...")
+    center(fb, 8 + 10, "LISTENING")
+    center(fb, 8 + 22, "FSK: FORD|TOYOTA")
+    center(fb, 8 + 30, "OOK: SCHRADER")
+    center(fb, 8 + 38, "UK/EU")
     label = "MENU"
-    inverse(fb, label, 127 - len(label) * 4, 6, 127, False)
+    inverse(fb, label, 2, 6, 2 + len(label) * 4, False)
     return fb
 
 
@@ -158,10 +165,10 @@ def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     docs = os.path.join(root, "docs")
     os.makedirs(docs, exist_ok=True)
-    write_png(os.path.join(docs, "waiting.png"), scene_waiting())
+    write_png(os.path.join(docs, "main_screen.png"), scene_waiting())
     write_png(os.path.join(docs, "menu.png"), scene_menu())
     write_png(os.path.join(docs, "list.png"), scene_list())
-    print("wrote docs/waiting.png docs/menu.png docs/list.png")
+    print("wrote docs/main_screen.png docs/menu.png docs/list.png")
 
 
 if __name__ == "__main__":

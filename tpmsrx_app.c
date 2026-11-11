@@ -136,6 +136,12 @@ static void tiny(char *buf, uint8_t x, uint8_t y, char *end)
     g.A->print_tiny(buf, x, y, false, true);
 }
 
+static void tinyCenter(char *buf, uint8_t y, char *end)
+{
+    unsigned w = (unsigned)(end - buf) * 4u;
+    tiny(buf, (uint8_t)((w >= 128u) ? 0u : ((128u - w) >> 1)), y, end);
+}
+
 static uint8_t activePath(void)
 {
     if (g.cfg.pref == PREF_OOK) return TPMS_MODE_OOK;
@@ -305,12 +311,24 @@ static void draw(const char *ui)
     if (!g.nRows) {
         unsigned w;
         o = put(str, ui + T_WAIT);
-        tiny(str, 40, 28, o);
-        /* Last body row, right edge. The MENU key is under that corner. */
+        tinyCenter(str, 10, o);
+        o = put(str, ui + T_CARS1);
+        tinyCenter(str, 22, o);
+        {
+            uint8_t y = 30;
+            if (ui[T_CARS2]) {
+                o = put(str, ui + T_CARS2);
+                tinyCenter(str, y, o);
+                y = (uint8_t)(y + 8u);
+            }
+            o = put(str, ui + T_REGION);
+            tinyCenter(str, y, o);
+        }
+        /* Last body row, left edge. */
         o = put(str, ui + T_MENU);
         *o = '\0';
         w = (unsigned)(o - str) * 4u;
-        g.A->print_inverse(str, (uint8_t)(127u - w), 6, false, true, 127);
+        g.A->print_inverse(str, 2, 6, false, true, (uint8_t)(2u + w));
         return;
     }
     for (uint8_t i = 0; i < g.nRows && i < ROWS; i++) {

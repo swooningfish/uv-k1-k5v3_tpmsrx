@@ -24,10 +24,7 @@ UI = [
     ("T_MENU", "MENU"),
     ("T_BAND", "BAND"),
     ("T_MODE", "MODE"),
-    ("T_DISP", "DISP"),
     ("T_CLR", "CLEAR"),
-    ("T_OFF", "OFF"),
-    ("T_TMO", "10s"),
     ("T_HELP1", "UP/DN SELECT"),
     ("T_HELP2", "MENU CHANGE  EXIT BACK"),
 ]
@@ -39,5 +36,5 @@ for name, value in UI:
     ui_size += len(value) + 1 + pad
 a.const("UI_SIZE", ui_size)
 a.const("T_TITLE_CHARS", len(TITLE))
-a.const("MENU_ITEMS", 4)
+a.const("MENU_ITEMS", 3)
 a.main()

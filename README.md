@@ -29,9 +29,11 @@ model, id, pressure, temperature, RSSI, and age. There is no packet history.
 
 ## Install
 
-1. Download `TPMSRX.app` from the
-   [Releases](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/releases) page,
-   or from a [workflow artifact](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/actions).
+1. Download `TPMSRX.zip` from the
+   [Releases](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/releases) page
+   and unzip it. GitHub rejects a `.app` upload. A
+   [workflow artifact](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/actions)
+   is the raw `TPMSRX.app`.
 2. In UV Studio, open Apps, connect the radio and install `TPMSRX.app` from a
    local file.
 3. On the radio, open the Apps menu (`F` then `7`), select **TPMS RX** and press
@@ -53,7 +55,6 @@ model, id, pressure, temperature, RSSI, and age. There is no packet history.
 |---|---|
 | `BAND` | `315.00` / `433.92` |
 | `MODE` | `FSK` / `OOK` / `AUTO` |
-| `DISP` | `OFF` / `10s` (backlight off 10 seconds after the last key; the text stays) |
 | `CLEAR` | Wipe the seven live rows |
 
 `UP` / `DOWN` (UV-K1: nav) move the selection. `MENU`, `*`, `2`, or `5` change the item. `EXIT` closes the menu.

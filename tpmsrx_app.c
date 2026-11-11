@@ -43,8 +43,7 @@ void *memset(void *d, int c, size_t n)
 #define AUTO_HOLD_MS   10000u
 #define MENU_BAND      0u
 #define MENU_MODE      1u
-#define MENU_DISP      2u
-#define MENU_CLR       3u
+#define MENU_CLR       2u
 #define DISP_OFF       1u
 #define DISP_TMO       2u
 #define DISP_IDLE_MS   10000u
@@ -221,7 +220,7 @@ static void drawStatus(const char *ui)
     width = (unsigned)(o - str) * 4u;
     /* 22 px clears the title capsule. 48 px covers the battery icon plus text. */
     if (width + 22u + BATT_RESERVE <= 128u)
-        g.A->print_tiny(str, (uint8_t)(128u - BATT_RESERVE - width), 1, true, false);
+        g.A->print_tiny(str, (uint8_t)(128u - BATT_RESERVE - width), 1, true, true);
     else
         g.A->print_tiny(str, 2, 1, false, true);
 }
@@ -230,7 +229,7 @@ static void drawMenu(const char *ui)
 {
     char str[28];
     char *o;
-    const uint16_t labels[4] = { T_BAND, T_MODE, T_DISP, T_CLR };
+    const uint16_t labels[3] = { T_BAND, T_MODE, T_CLR };
     for (uint8_t i = 0; i < MENU_ITEMS; i++) {
         o = str;
         *o++ = (i == g.menuSel) ? '>' : ' ';
@@ -241,8 +240,7 @@ static void drawMenu(const char *ui)
             if (g.cfg.pref == PREF_AUTO) o = put(o, ui + T_AUTO);
             else if (g.cfg.pref == PREF_OOK) o = put(o, ui + T_OOK);
             else o = put(o, ui + T_FSK);
-        } else if (i == MENU_DISP)
-            o = put(o, ui + (g.cfg.disp == DISP_OFF ? T_OFF : T_TMO));
+        }
         *o = '\0';
         /* Capsules like CW Keyer help: selected row is the full-width mark. */
         g.A->print_inverse(str, 2, (uint8_t)(i + 1u), false, true,
@@ -317,17 +315,6 @@ static void menuChange(dectpms_t *dec)
             break;
         case MENU_MODE:
             cyclePref(dec);
-            break;
-        case MENU_DISP:
-            if (g.cfg.disp == DISP_OFF) {
-                g.cfg.disp = DISP_TMO;
-                g.blOff = 0;
-                g.lastKey = g.A->ticks_ms();
-            } else {
-                g.cfg.disp = DISP_OFF;
-                g.blOff = 1;
-                g.menu = 0;
-            }
             break;
         case MENU_CLR:
             g.nRows = 0;

@@ -45,6 +45,10 @@ void *memset(void *d, int c, size_t n)
 #define MENU_MODE      1u
 #define MENU_DISP      2u
 #define MENU_CLR       3u
+#define DISP_OFF       1u
+#define DISP_TMO       2u
+#define DISP_IDLE_MS   10000u
+#define BATT_RESERVE   48u
 
 typedef struct {
     uint32_t id;
@@ -58,14 +62,15 @@ typedef struct {
 typedef struct {
     uint8_t band433;
     uint8_t pref;     /* PREF_FSK / PREF_OOK / PREF_AUTO */
+    uint8_t disp;     /* DISP_OFF / DISP_TMO */
 } app_cfg_t;
 
 static struct {
     const app_api_t *A;
-    uint8_t prevKey, led, nRows, refresh, menu, menuSel, dispOff, path;
+    uint8_t prevKey, led, nRows, refresh, menu, menuSel, asleep, path;
     uint16_t ledCnt, keyCnt;
     int16_t rssi;
-    uint32_t autoAt, lastHit;
+    uint32_t autoAt, lastHit, lastKey;
     app_cfg_t cfg;
     row_t *rows;
 } g;
@@ -204,6 +209,7 @@ static void drawStatus(const char *ui)
 {
     char str[20];
     char *o;
+    unsigned width;
     g.A->status_clear();
     g.A->draw_battery();
     g.A->print_inverse(ui + (g.menu ? T_MENU : T_TITLE), 2, 0, true, true,
@@ -212,7 +218,12 @@ static void drawStatus(const char *ui)
     *o++ = ' ';
     o = put(o, modeLabel(ui));
     *o = '\0';
-    g.A->print_tiny(str, 28, 1, true, false);
+    width = (unsigned)(o - str) * 4u;
+    /* 22 px clears the title capsule. 48 px covers the battery icon plus text. */
+    if (width + 22u + BATT_RESERVE <= 128u)
+        g.A->print_tiny(str, (uint8_t)(128u - BATT_RESERVE - width), 1, true, false);
+    else
+        g.A->print_tiny(str, 2, 1, false, true);
 }
 
 static void drawMenu(const char *ui)
@@ -231,16 +242,17 @@ static void drawMenu(const char *ui)
             else if (g.cfg.pref == PREF_OOK) o = put(o, ui + T_OOK);
             else o = put(o, ui + T_FSK);
         } else if (i == MENU_DISP)
-            o = put(o, ui + (g.dispOff ? T_OFF : T_ON));
+            o = put(o, ui + (g.cfg.disp == DISP_OFF ? T_OFF : T_TMO));
         *o = '\0';
         /* Capsules like CW Keyer help: selected row is the full-width mark. */
         g.A->print_inverse(str, 2, (uint8_t)(i + 1u), false, true,
                            (uint8_t)(i == g.menuSel ? 100u : 78u));
     }
+    /* Body is 56 px. A 6 px glyph at y=47 ends at pixel 52. */
     o = put(str, ui + T_HELP1);
-    tiny(str, 2, 44, o);
+    tiny(str, 2, 41, o);
     o = put(str, ui + T_HELP2);
-    tiny(str, 2, 52, o);
+    tiny(str, 2, 47, o);
 }
 
 __attribute__((noinline))
@@ -250,7 +262,7 @@ static void draw(const char *ui)
     char *o;
     uint32_t now = g.A->ticks_ms();
 
-    if (g.dispOff && !g.menu) {
+    if (g.asleep && !g.menu) {
         g.A->display_clear();
         g.A->status_clear();
         g.A->blit_status();
@@ -315,8 +327,15 @@ static void menuChange(dectpms_t *dec)
             cyclePref(dec);
             break;
         case MENU_DISP:
-            g.dispOff ^= 1u;
-            if (g.dispOff) g.menu = 0;
+            if (g.cfg.disp == DISP_OFF) {
+                g.cfg.disp = DISP_TMO;
+                g.asleep = 0;
+                g.lastKey = g.A->ticks_ms();
+            } else {
+                g.cfg.disp = DISP_OFF;
+                g.asleep = 1;
+                g.menu = 0;
+            }
             break;
         case MENU_CLR:
             g.nRows = 0;
@@ -328,9 +347,11 @@ static void menuChange(dectpms_t *dec)
 
 static bool handleKey(uint8_t key, dectpms_t *dec)
 {
-    if (g.dispOff && !g.menu) {
+    g.lastKey = g.A->ticks_ms();
+    if (g.asleep && !g.menu) {
         if (key == APP_KEY_EXIT) return true;
-        g.dispOff = 0;
+        g.asleep = 0;
+        if (g.cfg.disp == DISP_OFF) g.cfg.disp = DISP_TMO;
         if (key == APP_KEY_0) return false; /* toggle consumed as wake */
         /* fall through so other keys still act */
     }
@@ -344,11 +365,11 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             g.menuSel = (uint8_t)n;
             return false;
         }
-        if (key == APP_KEY_EXIT || key == APP_KEY_MENU) {
+        if (key == APP_KEY_EXIT) {
             g.menu = 0;
             return false;
         }
-        if (key == APP_KEY_STAR || key == APP_KEY_2 || key == APP_KEY_5)
+        if (key == APP_KEY_MENU || key == APP_KEY_STAR || key == APP_KEY_2 || key == APP_KEY_5)
             menuChange(dec);
         return false;
     }
@@ -369,12 +390,21 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             cyclePref(dec);
             break;
         case APP_KEY_0:
-            g.dispOff = 1;
+            g.cfg.disp = DISP_OFF;
+            g.asleep = 1;
             break;
         default:
             break;
     }
     return false;
+}
+
+static bool serviceDisp(void)
+{
+    if (g.cfg.disp != DISP_TMO || g.menu || g.asleep) return false;
+    if ((uint32_t)(g.A->ticks_ms() - g.lastKey) < DISP_IDLE_MS) return false;
+    g.asleep = 1;
+    return true;
 }
 
 static void serviceAuto(dectpms_t *dec)
@@ -398,6 +428,7 @@ static void listen(const char *ui)
     bool wantUi = true;
     g.autoAt = g.A->ticks_ms();
     g.lastHit = 0;
+    g.lastKey = g.autoAt;
 
     for (;;) {
         while ((int32_t)(clk() - next) < 0) {}
@@ -410,7 +441,7 @@ static void listen(const char *ui)
             g.led = 2u;
             g.ledCnt = 0;
             g.A->led(true);
-            wantUi = !g.dispOff;
+            wantUi = !g.asleep;
             dectpms_rearm(&dec);
         }
 
@@ -425,6 +456,7 @@ static void listen(const char *ui)
         }
         g.keyCnt = 0;
         serviceAuto(&dec);
+        if (serviceDisp()) wantUi = true;
 
         uint8_t key = g.A->get_key();
         bool keyUi = key != g.prevKey && key != APP_KEY_INVALID;
@@ -434,14 +466,14 @@ static void listen(const char *ui)
             wantUi = true;
         }
 
-        if (wantUi || (!g.dispOff && ++g.refresh >= REFRESH_POLLS)) {
+        if (wantUi || (!g.asleep && ++g.refresh >= REFRESH_POLLS)) {
             g.refresh = 0;
-            if (!g.dispOff || g.menu) g.rssi = g.A->rssi_dbm();
+            if (!g.asleep || g.menu) g.rssi = g.A->rssi_dbm();
             g.A->battery_sample();
             draw(ui);
             g.A->blit_status();
             g.A->blit_full();
-            if (g.dispOff && !g.menu) g.A->backlight_update();
+            if (g.asleep && !g.menu) g.A->backlight_update();
             else g.A->backlight_on();
             wantUi = false;
             next = clk() + CYC_PER_SAMPLE;
@@ -463,7 +495,8 @@ void app_main(const app_api_t *api)
     g.prevKey = APP_KEY_INVALID;
     g.nRows = 0;
     g.menu = 0;
-    g.dispOff = 0;
+    g.asleep = 0;
+    g.cfg.disp = DISP_TMO;
     api->led(false);
     api->asset_read(0, ui, UI_SIZE);
 
@@ -476,10 +509,12 @@ void app_main(const app_api_t *api)
         g.cfg.band433 = cfg[1] ? 1u : 0u;
         if (cfg[0] == CFG_MAGIC && cfg[2] <= PREF_AUTO) g.cfg.pref = cfg[2];
         else g.cfg.pref = cfg[2] ? PREF_OOK : PREF_FSK;
+        if (cfg[0] == CFG_MAGIC && cfg[3] == DISP_OFF) g.cfg.disp = DISP_OFF;
     } else {
         g.cfg.band433 = 1u;
         g.cfg.pref = PREF_FSK;
     }
+    if (g.cfg.disp == DISP_OFF) g.asleep = 1;
     g.path = (g.cfg.pref == PREF_OOK) ? TPMS_MODE_OOK : TPMS_MODE_FSK;
 
     applyRf();
@@ -495,6 +530,6 @@ void app_main(const app_api_t *api)
     cfg[0] = CFG_MAGIC;
     cfg[1] = g.cfg.band433;
     cfg[2] = g.cfg.pref;
-    cfg[3] = 0;
+    cfg[3] = g.cfg.disp;
     api->cfg_save(cfg, 4);
 }

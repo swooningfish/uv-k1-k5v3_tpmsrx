@@ -18,7 +18,7 @@ model, id, pressure, temperature, RSSI, and age. There is no packet history.
 - Band: **315.00** or **433.92** MHz.
 - Demod: **FSK**, **OOK**, or **AUTO** (dwells ~2.5 s each; a decode holds the
   path for 10 s).
-- Options menu (`MENU`) and a display-off key for battery saving.
+- Options menu (`MENU`). The display blanks after 10 seconds, or stays off.
 - Receive only: the app never transmits.
 
 ## Requirements
@@ -41,10 +41,10 @@ model, id, pressure, temperature, RSSI, and age. There is no packet history.
 
 | Key | Action |
 |---|---|
-| `MENU` | Open or close the options menu |
+| `MENU` | Open the options menu. Inside the menu, cycle the selected item |
 | `2` | Toggle 315.00 / 433.92 MHz |
 | `*` | Cycle demod: FSK → OOK → AUTO |
-| `0` | Blank the LCD and let the backlight time out. Any key wakes; `EXIT` still quits |
+| `0` | Blank the LCD now (display off) and let the backlight time out. Any key wakes into the 10 second timeout. `EXIT` still quits |
 | `EXIT` | Quit (from the listen screen) or close the menu |
 
 ### Options menu
@@ -53,15 +53,20 @@ model, id, pressure, temperature, RSSI, and age. There is no packet history.
 |---|---|
 | `BAND` | `315.00` / `433.92` |
 | `MODE` | `FSK` / `OOK` / `AUTO` |
-| `DISP` | `ON` / `OFF` |
+| `DISP` | `OFF` / `10s` (blank 10 seconds after the last key) |
 | `CLEAR` | Wipe the seven live rows |
 
-`UP` / `DOWN` (UV-K1: nav) move the selection; `*` / `2` / `5` change the item.
-A valid decode blinks the green LED twice (also while the display is off).
+`UP` / `DOWN` (UV-K1: nav) move the selection. `MENU`, `*`, `2`, or `5` change the item. `EXIT` closes the menu.
+A valid decode blinks the green LED twice (also while the display is blank).
 
 ## Screen
 
-Status bar: title `TPMS` (or `MENU`), then band and mode, then battery.
+Status bar: title `TPMS` (or `MENU`) on the left, band and mode just left of the battery.
+
+![Waiting for a sensor](docs/waiting.png)
+
+![Options menu](docs/menu.png)
+
 
 | Mode setting | Status text |
 |---|---|

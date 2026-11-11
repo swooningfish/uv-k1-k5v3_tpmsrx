@@ -26,10 +26,10 @@ UI = [
     ("T_MODE", "MODE"),
     ("T_DISP", "DISP"),
     ("T_CLR", "CLEAR"),
-    ("T_ON", "ON"),
     ("T_OFF", "OFF"),
+    ("T_TMO", "10s"),
     ("T_HELP1", "UP/DN SELECT"),
-    ("T_HELP2", "* CHANGE  EXIT BACK"),
+    ("T_HELP2", "MENU CHANGE  EXIT BACK"),
 ]
 a = Assets("TPMS_RX")
 ui_size = 0

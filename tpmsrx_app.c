@@ -269,8 +269,14 @@ static void draw(const char *ui)
     }
 
     if (!g.nRows) {
+        unsigned w;
         o = put(str, ui + T_WAIT);
         tiny(str, 40, 28, o);
+        /* Last body row, right edge. The MENU key is under that corner. */
+        o = put(str, ui + T_MENU);
+        *o = '\0';
+        w = (unsigned)(o - str) * 4u;
+        g.A->print_inverse(str, (uint8_t)(127u - w), 6, false, true, 127);
         return;
     }
     for (uint8_t i = 0; i < g.nRows && i < ROWS; i++) {

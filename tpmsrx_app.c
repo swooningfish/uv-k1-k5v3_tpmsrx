@@ -61,7 +61,7 @@ void *memset(void *d, int c, size_t n)
 #define FREQ_315       31500000u
 #define FREQ_433       43392000u
 #define KEY_EVERY      1536u
-#define REFRESH_POLLS  25u
+#define DRAW_HOLD_MS   200u
 #define LED_STEP       (FS / 10u)
 #define CFG_MAGIC      0xB2u
 #define ROWS           7u
@@ -118,7 +118,7 @@ typedef struct {
 
 static struct {
     const app_api_t *A;
-    uint8_t prevKey, led, nRows, refresh, menu, menuSel, blOff, path, spk;
+    uint8_t prevKey, led, nRows, drawDue, menu, menuSel, blOff, path, spk;
     uint16_t ledCnt, keyCnt;
     int16_t rssi;
     uint32_t autoAt, lastHit, lastKey;
@@ -775,15 +775,17 @@ static bool serviceDisp(void)
  * In AUTO, swap demod after the dwell unless a fresh decode is held.
  *
  * @param dec Slicer to reset when the path changes.
+ * @return True when the demod was swapped.
  */
-static void serviceAuto(dectpms_t *dec)
+static bool serviceAuto(dectpms_t *dec)
 {
     uint32_t now;
-    if (g.cfg.pref != PREF_AUTO) return;
+    if (g.cfg.pref != PREF_AUTO) return false;
     now = g.A->ticks_ms();
-    if ((uint32_t)(now - g.lastHit) < AUTO_HOLD_MS) return;
-    if ((uint32_t)(now - g.autoAt) < AUTO_DWELL_MS) return;
+    if ((uint32_t)(now - g.lastHit) < AUTO_HOLD_MS) return false;
+    if ((uint32_t)(now - g.autoAt) < AUTO_DWELL_MS) return false;
     setPath((uint8_t)(g.path == TPMS_MODE_FSK ? TPMS_MODE_OOK : TPMS_MODE_FSK), dec);
+    return true;
 }
 
 /**
@@ -815,7 +817,7 @@ static void listen(const char *ui)
             g.led = 2u;
             g.ledCnt = 0;
             g.A->led(true);
-            wantUi = true;
+            g.drawDue = 1u;
             dectpms_rearm(&dec);
         }
 
@@ -829,8 +831,13 @@ static void listen(const char *ui)
             if (++g.keyCnt < KEY_EVERY) continue;
         }
         g.keyCnt = 0;
-        serviceAuto(&dec);
+        if (serviceAuto(&dec)) wantUi = true;
         if (serviceDisp()) wantUi = true;
+        /* Drawing blocks sampling, so wait out the rest of the burst train. */
+        if (g.drawDue && (uint32_t)(g.A->ticks_ms() - g.lastHit) >= DRAW_HOLD_MS) {
+            g.drawDue = 0;
+            wantUi = true;
+        }
 
         uint8_t key = g.A->get_key();
         bool keyUi = key != g.prevKey && key != APP_KEY_INVALID;
@@ -845,9 +852,8 @@ static void listen(const char *ui)
         g.A->backlight_update();
         if (backlightHeld()) g.A->backlight_on();
 
-        if (wantUi || ++g.refresh >= REFRESH_POLLS) {
-            g.refresh = 0;
-            g.rssi = g.A->rssi_dbm();
+        if (wantUi) {
+            g.drawDue = 0;
             g.A->battery_sample();
             draw(ui);
             g.A->blit_status();

@@ -103,7 +103,7 @@ On F4HWN Labs, load and manage overlay apps in the browser at
 | `2` | Toggle 315.00 / 433.92 MHz. No effect in `TPMS EU2` |
 | `*` | Cycle demod: FSK, OOK, AUTO. No effect in `TPMS EU2` or `TPMS NA2` |
 | `0` | Turn the backlight off and hide the status bulb. The screen stays drawn. Any key lights it again for 10 seconds and shows the bulb. `EXIT` still quits |
-| `1` | Speaker on or off. `S` shows on the status line while it is on. The screen refresh clicks about once a second |
+| `1` | Speaker on or off. `S` shows on the status line while it is on |
 | `EXIT` | Quit (from the listen screen) or close the menu |
 
 `1` sends the same audio the decoder hears to the speaker. Hiss means the
@@ -177,7 +177,8 @@ SCHR 003A38B2 48psi 12C -81 2m
 
 `EG53` and `BMW` use the same layout. Nissan and Infiniti show as `NISS` and
 have no temperature. The number after the signal is the age: seconds, then
-minutes, then hours.
+minutes, then hours. Drawing the screen pauses decoding, so the list only
+redraws on a key press or 200 ms after a decode. Ages are as of that redraw.
 
 ## How a reading is checked
 

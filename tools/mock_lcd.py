@@ -189,19 +189,24 @@ def center(fb, y, s):
 
 
 def hint_strip(fb, s):
-    """Right-aligned on the MENU capsule baseline (print_inverse line 6 → y=57)."""
+    """Right-aligned on the MENU capsule baseline.
+
+    print_tiny y is a body pixel (status is a separate 8 px row). Line 6
+    glyphs start at body y=49, which is LCD y=57 in this combined buffer.
+    """
     w = len(s) * 4
     x = 2 if w >= 126 else 126 - w
-    text(fb, x, 57, s)
+    text(fb, x, 8 + 49, s)
 
 
 def scene_waiting(v):
     fb = new_fb()
     status(fb, "TPMS", v["status"])
-    center(fb, 8, v["listen"])
-    center(fb, 16, v["cars"][0])
+    # Body y, same calls as tinyCenter in draw(): 8, 16, 24.
+    center(fb, 8 + 8, v["listen"])
+    center(fb, 8 + 16, v["cars"][0])
     if v["cars"][1]:
-        center(fb, 24, v["cars"][1])
+        center(fb, 8 + 24, v["cars"][1])
     label = "MENU"
     inverse(fb, label, 2, 6, 2 + len(label) * 4, False)
     hint_strip(fb, v["hints"])
@@ -230,7 +235,7 @@ def scene_list():
         "SCHR 003A38B2 48psi 12C -81 2m",
     )
     for i, s in enumerate(rows):
-        text(fb, 0, 8 + i * 6, s)
+        text(fb, 0, 8 + 8 + i * 6, s)
     label = "MENU"
     inverse(fb, label, 2, 6, 2 + len(label) * 4, False)
     hint_strip(fb, "2 BAND  * MODE  0 LIGHT")

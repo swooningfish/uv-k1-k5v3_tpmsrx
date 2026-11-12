@@ -339,8 +339,9 @@ static void drawListHints(const char *ui)
     char *o = put(str, ui + T_HINT);
     unsigned w = (unsigned)(o - str) * 4u;
     uint8_t x = (uint8_t)((w >= 126u) ? 2u : (126u - w));
-    /* print_inverse on line 6 draws glyphs at y = 8+6*8+1 = 57. */
-    tiny(str, x, 57, o);
+    /* Body line 6. print_inverse draws glyphs at (line * 8) + 1.
+     * y is body pixels (0..55); 57 is the next page and lands on the status line. */
+    tiny(str, x, 49, o);
 }
 
 __attribute__((noinline))

@@ -85,6 +85,8 @@ def test_layout_source() -> None:
     print("Main-list layout (tpmsrx_app.c)")
     src = read("tpmsrx_app.c")
     check("drawListHints" in src, "drawListHints helper")
+    check("tiny(str, x, 49, o)" in src, "key hints use body line 6 (y=49)")
+    check("tiny(str, x, 57, o)" not in src, "key hints stay inside the 56 px body")
     check("T_HINT" in src and "T_HINT1" not in src and "T_HINT2" not in src,
           "uses single T_HINT strip")
     check('put(str, ui + T_WAIT)' in src and "putBand(o)" in src and "T_REGION" in src,

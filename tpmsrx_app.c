@@ -1,4 +1,4 @@
-/* Copyright 2026 — Apache-2.0
+﻿/* Copyright 2026 — Apache-2.0
  * TPMS RX: Ford / Toyota FSK and Schrader OOK on PA4 at 38.4 kHz.
  */
 #include <stdint.h>
@@ -179,23 +179,27 @@ static void selectUhfLna(void)
     if (g.A->bk_read(REG_33) != n) g.A->bk_write(REG_33, cur);
 }
 
+/* Park on 315.000 or 433.920 only (×10 Hz). No frequency sweep.
+ * tones_off_rx pulses REG_30 (PLL) and forces AF mute — every IF/AF write
+ * must run after it, and the active path must fully own REG_47 so FSK↔OOK
+ * never leaves mute or the other mode's AF route. */
 static void applyRf(void)
 {
     uint32_t f = g.cfg.band433 ? FREQ_433 : FREQ_315;
     uint8_t path = activePath();
     g.A->bk_write(REG_38, (uint16_t)(f & 0xFFFFu));
     g.A->bk_write(REG_39, (uint16_t)(f >> 16));
-    /* tones_off_rx latches the PLL and forces AF mute. Demod writes follow. */
     g.A->tones_off_rx();
-    if (path == TPMS_MODE_FSK) {
-        g.A->bk_write(REG_2B, (uint16_t)((g.A->bk_read(REG_2B) | 0x0700u) & ~0x0007u));
-        g.A->bk_write(REG_73, (uint16_t)(g.A->bk_read(REG_73) | 0x0010u));
-        g.A->bk_write(REG_43, REG_43_WIDE);
+    /* Shared front-end: wide IF, filters bypassed, AFC off, fixed gain. */
+    g.A->bk_write(REG_2B, (uint16_t)((g.A->bk_read(REG_2B) | 0x0700u) & ~0x0007u));
+    g.A->bk_write(REG_73, (uint16_t)(g.A->bk_read(REG_73) | 0x0010u));
+    g.A->bk_write(REG_43, REG_43_WIDE);
+    g.A->set_agc(false);
+    /* AF last: clears mute from tones_off_rx. FSK = raw bypass; OOK = AM. */
+    if (path == TPMS_MODE_FSK)
         g.A->bk_write(REG_47, REG_47_BYPASS);
-    } else {
+    else
         g.A->set_af(APP_AF_AM);
-        g.A->bk_write(REG_43, REG_43_WIDE);
-    }
     selectUhfLna();
     g.A->audio_path(false);
 }
@@ -576,7 +580,7 @@ void app_main(const app_api_t *api)
     row_t rows[ROWS];
     uint8_t cfg[4];
     char ui[UI_SIZE] __attribute__((aligned(4)));
-    uint16_t r43;
+    uint16_t r43, r2b;
 
     memset(rows, 0, sizeof rows);
     g.A = api;
@@ -591,6 +595,7 @@ void app_main(const app_api_t *api)
 
     api->af_capture_open();
     r43 = api->bk_read(REG_43);
+    r2b = api->bk_read(REG_2B);
 
     /* Defaults per flavour (first launch). Saved band/mode are restored when
      * present, then lock flags below force OOK / 433.92 where the sensors need it. */
@@ -627,6 +632,8 @@ void app_main(const app_api_t *api)
     listen(ui);
 
     api->bk_write(REG_43, r43);
+    api->bk_write(REG_2B, r2b);
+    api->set_agc(true);
     api->af_capture_close();
     api->set_af(APP_AF_MUTE);
     api->audio_path(false);

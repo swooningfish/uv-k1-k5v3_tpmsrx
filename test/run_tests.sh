@@ -9,4 +9,9 @@ trap 'rm -rf "$TMP"' EXIT
 echo "dectpms host tests"
 "$CC" -std=c11 -Wall -Wextra -O2 -o "$TMP/host_dectpms" "$HERE/host_dectpms.c"
 "$TMP/host_dectpms"
+
+PYTHON=${PYTHON:-python3}
+echo "variant / RF / layout checks"
+"$PYTHON" "$HERE/test_variants.py"
+
 echo "tpmsrx host tests passed"

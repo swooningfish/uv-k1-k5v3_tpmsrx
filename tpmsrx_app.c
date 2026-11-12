@@ -68,6 +68,13 @@ void *memset(void *d, int c, size_t n)
 #define DISP_TMO       2u
 #define DISP_IDLE_MS   10000u
 #define BATT_RESERVE   48u
+/* print_inverse paints the title capsule through this x (end pixel inclusive). */
+#define TITLE_CAP_END  (2u + T_TITLE_CHARS * 4u)
+
+/* F4HWN gFontLight: 9 status columns, LSB is the top pixel. */
+static const uint8_t LIGHT_ICON[9] = {
+    0x0Cu, 0x12u, 0x21u, 0x6Du, 0x79u, 0x6Du, 0x21u, 0x12u, 0x0Cu
+};
 
 typedef struct {
     uint32_t id;
@@ -264,6 +271,20 @@ static void upsert(const tpms_pkt_t *p, int16_t rssi)
     r->t = now;
 }
 
+/* Bulb in the gap between the title capsule and the band. Setting off hides it,
+ * including after `0`, so a daylight read still shows whether the lamp is armed. */
+static void drawLight(uint8_t bandX)
+{
+    uint8_t *line;
+    unsigned gap;
+    if (g.cfg.disp != DISP_TMO) return;
+    if (bandX < TITLE_CAP_END + 2u + sizeof LIGHT_ICON) return;
+    line = g.A->status_line;
+    if (!line) return;
+    gap = (unsigned)(bandX - (TITLE_CAP_END + 1u) - sizeof LIGHT_ICON);
+    memcpy(line + (TITLE_CAP_END + 1u) + (gap >> 1), LIGHT_ICON, sizeof LIGHT_ICON);
+}
+
 static void drawStatus(const char *ui)
 {
     char str[20];
@@ -279,9 +300,11 @@ static void drawStatus(const char *ui)
     *o = '\0';
     width = (unsigned)(o - str) * 4u;
     /* 22 px clears the title capsule. 48 px covers the battery icon plus text. */
-    if (width + 22u + BATT_RESERVE <= 128u)
-        g.A->print_tiny(str, (uint8_t)(128u - BATT_RESERVE - width), 1, true, true);
-    else
+    if (width + 22u + BATT_RESERVE <= 128u) {
+        uint8_t bandX = (uint8_t)(128u - BATT_RESERVE - width);
+        g.A->print_tiny(str, bandX, 1, true, true);
+        drawLight(bandX);
+    } else
         g.A->print_tiny(str, 2, 1, false, true);
 }
 

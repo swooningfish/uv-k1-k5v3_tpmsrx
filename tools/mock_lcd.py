@@ -193,10 +193,38 @@ def battery(fb, pct="78%"):
     text_small(fb, 112 - 7 * len(pct), pct)
 
 
-def status(fb, title, band):
-    inverse(fb, title, 2, 0, 2 + len(title) * 4, True)
+# F4HWN gFontLight. Column bytes, LSB = top of the status row.
+_LIGHT = (
+    0b00001100,
+    0b00010010,
+    0b00100001,
+    0b01101101,
+    0b01111001,
+    0b01101101,
+    0b00100001,
+    0b00010010,
+    0b00001100,
+)
+def light_icon(fb, band_x, cap_end):
+    """Same gap as drawLight(): centered between the capsule and the band."""
+    if band_x < cap_end + 2 + len(_LIGHT):
+        return
+    gap = band_x - (cap_end + 1) - len(_LIGHT)
+    x = (cap_end + 1) + gap // 2
+    for col, bits in enumerate(_LIGHT):
+        for row in range(8):
+            if bits & (1 << row):
+                px(fb, x + col, row, 1)
+
+
+def status(fb, title, band, light=True):
+    cap_end = 2 + len(title) * 4
+    inverse(fb, title, 2, 0, cap_end, True)
     width = len(band) * 4
-    text(fb, 128 - 48 - width, 1, band)
+    band_x = 128 - 48 - width
+    text(fb, band_x, 1, band)
+    if light:
+        light_icon(fb, band_x, cap_end)
     battery(fb)
 
 

@@ -99,7 +99,7 @@ On F4HWN Labs, load and manage overlay apps in the browser at
 | `MENU` | Open the options menu. Inside the menu, cycle the selected item |
 | `2` | Toggle 315.00 / 433.92 MHz. No effect in `TPMS EU2` |
 | `*` | Cycle demod: FSK, OOK, AUTO. No effect in `TPMS EU2` or `TPMS NA2` |
-| `0` | Turn the backlight off. The screen stays drawn. Any key lights it again for 10 seconds. `EXIT` still quits |
+| `0` | Turn the backlight off and hide the status bulb. The screen stays drawn. Any key lights it again for 10 seconds and shows the bulb. `EXIT` still quits |
 | `EXIT` | Quit (from the listen screen) or close the menu |
 
 ### Options menu
@@ -121,9 +121,10 @@ A valid decode blinks the green LED, including while the backlight is off.
 
 ## Screen
 
-The status line shows `TPMS` (or `MENU`) on the left, the band and demod just
-left of the battery, and the battery percent plus icon on the right (same
-F4HWN / Temp 433 status battery).
+The status line shows `TPMS` (or `MENU`) on the left, a light bulb when the
+backlight setting is on, the band and demod just left of the battery, and the
+battery percent plus icon on the right (same F4HWN / Temp 433 status battery).
+`0` hides the bulb. It comes back with the light on the next key.
 
 While no sensors have been heard, the listening line is
 `LISTENING <band> <region>`, then the car / protocol lines, then free-row

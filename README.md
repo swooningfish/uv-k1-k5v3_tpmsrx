@@ -23,7 +23,7 @@ asset strings. There are no separate regional `.c` trees.
 | `TPMS NA` | United States and Canada | 315 MHz | FSK | Ford, Toyota, Schrader MRXGG4 | FSK and OOK | 4036 B |
 | `TPMS EU2` | UK and Europe | 433.92 MHz (fixed) | OOK (fixed) | Vauxhall, Opel, Saab; BMW and Mini with the Schrader sensor | OOK | 3396 B |
 | `TPMS NA2` | United States and Canada | 315 MHz | OOK (fixed) | Chevrolet and other GM; Subaru; Nissan and Infiniti | OOK | 3584 B |
-| `TPMS DBG` | Either band, no decode | 433.92 MHz | FSK | Records raw bursts | FSK or OOK | 2704 B |
+| `TPMS DBG` | Either band, no decode | 433.92 MHz | FSK | Records raw bursts | FSK or OOK | 3840 B |
 
 ### Defaults and what you can change
 
@@ -55,7 +55,8 @@ Chevrolet and GM use a different sensor, shown as `EG53`, and that pressure
 is not affected.
 
 If `TPMS EU` or `TPMS NA` stays on Listening, try the second app for that region.
-`1` turns the speaker on. `TPMS DBG` records the raw burst without decoding it.
+`1` turns the speaker on. `TPMS DBG` records the raw burst without decoding it
+and walks you through a check ([docs/debug.md](docs/debug.md)).
 
 ## What every app does
 
@@ -111,32 +112,15 @@ audio path is muted or there is no signal.
 
 ### TPMS DBG
 
-Separate app. It does not decode. It parks on the same frequencies and uses
-the same audio route as the list apps, then records each raw burst (the sliced
-bits, before Manchester or checksums).
+Separate app for when a list app stays on Listening. It does not decode. It
+parks on the same frequencies and audio route as the list apps, records each
+raw burst, counts wake attempts from signal jumps, and has a Yes / No wizard on
+`MENU` that suggests what to change. Keys, screen fields, example readings and
+the wizard are in [docs/debug.md](docs/debug.md).
 
-| Key | Action |
-|---|---|
-| `1` | Speaker. The screen is dripped out so the speaker does not flutter |
-| `2` | Toggle 315.00 / 433.92 |
-| `*` | Toggle FSK / OOK (`F` / `O` on the status line) |
-| `5` | Clear the peaks and the last burst |
-| `EXIT` | Quit |
-
-The lines under the status bar:
-
-| Text | Meaning |
-|---|---|
-| `R` | Signal now, then the strongest since you opened the app or pressed `5` |
-| `A` | Loudest audio sample in the last 20 ms, then the strongest so far |
-| `F` | Audio route nibble. FSK should be `9`. OOK should be `7`. `0` is mute |
-| `U` | `1` when the UHF antenna path read back |
-| `N` | Bursts recorded |
-| `B` | Bit count of the last burst, then its first bytes in hex |
-
-A USB host that has the port open gets one line per burst:
-`dbg 433 F r=-88 a=600 n=2 b=96 5556…`.
-`r` and `a` are that burst's signal and audio peak. `b` is the bit count.
+The screen can show audio (`A`) moving while nothing is decoded. Signal (`R`)
+that never jumps when a sensor is woken means no RF reached the radio, not a
+squelch problem.
 
 ### Options menu
 

@@ -155,8 +155,17 @@ def test_dbg_app() -> None:
     check("tpms_parse_" not in src, "recorder does not decode TPMS fields")
     check("REG_47_BYPASS" in src and "APP_AF_AM" in src, "same FSK bypass and OOK AM routes")
     check("APP_KEY_1" in src and "audio_path(g.spk" in src, "speaker toggle")
-    check("serial_write" in src and "meterTick" in src, "USB line and live meters")
+    check("meterTick" in src, "live meters")
     check('tpmsdbg_app.c' in sh and 'TPMS DBG' in sh, "build.sh packs TPMS DBG")
+    check("SPIKE_DB" in src and "spikeTick()" in src, "RSSI wake-spike counter")
+    check("nav_dir" in src and "case APP_KEY_MENU" in src and "wizOpen()" in src,
+          "MENU opens the Yes / No wizard")
+    m = re.search(r"#define\s+REFRESH_FAST\s+(\d+)u", src)
+    check(m is not None and int(m.group(1)) > 1, "REFRESH_FAST counts polls, not samples")
+    loop = src[src.find("static void listen(void)"):]
+    i_key = loop.find("++g.keyCnt < KEY_EVERY")
+    i_ref = loop.find("++g.refresh")
+    check(0 <= i_key < i_ref, "redraw counter runs after the key-poll gate")
 
 
 def test_build_flavours() -> None:

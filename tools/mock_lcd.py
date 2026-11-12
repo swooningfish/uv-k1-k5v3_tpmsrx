@@ -382,6 +382,53 @@ def scene_list():
     return fb
 
 
+# TPMS DBG screens: status band text, then (body y, text) rows as draw() and
+# drawWiz() in tpmsdbg_app.c place them.
+DBG_SCENES = {
+    "dbg_idle": ("433.92 F", (
+        (0, "R-98 -98"),
+        (8, "A812/926 F9 U1 N0"),
+        (16, "B0"),
+        (24, "T42 Rb-98 W0 M0 L-"),
+    )),
+    "dbg_burst": ("433.92 F", (
+        (0, "R-72 -65"),
+        (8, "A1200/2400 F9 U1 N3"),
+        (16, "B96 5556A1B2C3D45A69"),
+        (24, "T80 Rb-98 W3 M3 L2"),
+    )),
+    "dbg_wiz_hiss": ("433.92 F S", (
+        (0, "SPEAKER ON. HEAR HISS?"),
+        (32, " > YES    NO"),
+        (48, "ARROWS PICK, MENU OK"),
+    )),
+    "dbg_wiz_wake": ("433.92 F S", (
+        (0, "WAKE A SENSOR NOW"),
+        (8, "MENU WHEN DONE"),
+        (32, "W1 N0  21S LEFT"),
+    )),
+    "dbg_wiz_verdict": ("433.92 F S", (
+        (0, "RF SEEN, SLICER MISSED IT"),
+        (8, "PRESS * FOR FSK/OOK, RETRY"),
+        (48, "MENU OR EXIT TO CLOSE"),
+    )),
+}
+
+
+def scene_dbg(band, rows):
+    """Draw one TPMS DBG screen.
+
+    @param band Status-line band, demod, and speaker text.
+    @param rows Pairs of body pixel row and text.
+    @return The framebuffer.
+    """
+    fb = new_fb()
+    status(fb, "DBG", band, light=False)
+    for y, s in rows:
+        text(fb, 0, 8 + y, s)
+    return fb
+
+
 def write_png(path, fb):
     """Paint one K5Viewer cell per LCD pixel.
 
@@ -446,6 +493,10 @@ def main():
         write_png(os.path.join(root, w), scene_waiting(v))
         write_png(os.path.join(root, m), scene_menu(v))
         written.extend([w, m])
+    for key, (band, rows) in DBG_SCENES.items():
+        d = f"docs/{key}.png"
+        write_png(os.path.join(root, d), scene_dbg(band, rows))
+        written.append(d)
     print("wrote " + " ".join(written))
 
 

@@ -2,7 +2,9 @@
  * TPMS DBG: hear the receiver and record raw bursts. No TPMS decode.
  * Same park and AF route as the list apps (315.00 / 433.92, FSK bypass or OOK AM).
  * A burst is the sliced PCM the list app would have parsed. The last one stays
- * on screen and, if a USB host has the port open, goes out as one line.
+ * on screen.
+ * RSSI jumps over the idle baseline count as wake attempts. MENU opens a
+ * Yes / No wizard that turns the answers and those counts into a suggestion.
  */
 #include <stdint.h>
 #include <stdbool.h>
@@ -62,7 +64,7 @@ void *memset(void *d, int c, size_t n)
 #define FREQ_433       43392000u
 #define KEY_EVERY      1536u
 #define REFRESH_POLLS  25u
-#define REFRESH_FAST   1u
+#define REFRESH_FAST   6u
 #define COL_SAMPLES    768u
 #define FEED_SLACK     800
 #define CAP_BITS       192u
@@ -72,14 +74,36 @@ void *memset(void *d, int c, size_t n)
 #define GAP_FSK        8u
 #define GAP_OOK        24u
 #define LED_STEP       (FS / 10u)
+/* A wake attempt is RSSI this many dB over the idle baseline. */
+#define SPIKE_DB       10
+#define SEED_MS        5000u
+#define MATCH_MS       1000u
+#define WAKE_MS        30000u
+
+enum { WZ_OFF = 0, WZ_HISS, WZ_WAKE, WZ_BURST, WZ_DONE };
+enum { V_MUTE = 0, V_HISS, V_OK, V_NORF, V_NORSSI, V_SLICER, V_NOAF };
+
+/* Three body rows per verdict. */
+static const char *const VERDICT[] = {
+    "AF MUTED: F IS 0", "EXIT, RELAUNCH, CHECK F9 OR F7", "",
+    "NO HISS: TURN VOLUME UP", "EXIT, THEN MENU TO RETRY", "",
+    "RF AND SLICER OK", "USE LIST APP, SAME BAND/MODE", "LIST EMPTY? MODEL NOT IN APP",
+    "NO RF SEEN, NOTHING HEARD", "MOVE CLOSER, CHECK BAND (2)", "AND THE ANTENNA",
+    "HEARD IT, BUT NO RSSI RISE", "MOVE CLOSER AND RETRY", "",
+    "RF SEEN, SLICER MISSED IT", "PRESS * FOR FSK/OOK, RETRY", "",
+    "RF SEEN, BUT NOTHING HEARD", "CHECK F, PRESS * FOR DEMOD", "",
+};
 
 static struct {
     const app_api_t *A;
     uint8_t prevKey, spk, fsk, band433, led, hot, level, half;
-    uint8_t bitn, showN, bursts, logged, refresh;
+    uint8_t bitn, showN, bursts, refresh;
+    uint8_t wiz, wizSel, hiss, heard, muted, spkWas, w0, n0;
+    uint8_t wakes, matched, spiking, rbOk;
     uint16_t ledCnt, keyCnt, colN, afCol, afNow, afPk, gap, phase;
-    int16_t rssi, rssiPk, bRssi, logRssi;
-    int32_t mean, amp, bAf, logAf;
+    int16_t rssi, rssiPk;
+    int32_t mean, amp, rbQ;
+    uint32_t t0, lastHot, wizAt;
     bool lcd, want;
     uint8_t cap[CAP_BYTES];
     uint8_t show[CAP_BYTES];
@@ -256,9 +280,8 @@ static void commit(void)
     for (i = 0; i < nb; i++) g.show[i] = g.cap[i];
     for (; i < CAP_BYTES; i++) g.show[i] = 0;
     g.showN = g.bitn;
-    g.logRssi = g.bRssi;
-    g.logAf = g.bAf;
     if (g.bursts < 255u) g.bursts++;
+    if (g.wakes && g.A->ticks_ms() - g.lastHot < MATCH_MS && g.matched < 255u) g.matched++;
     g.led = 2u;
     g.ledCnt = 0;
     g.A->led(true);
@@ -308,14 +331,10 @@ static void push(uint16_t sample)
         if (!g.hot) {
             g.bitn = 0;
             g.phase = 0;
-            g.bAf = 0;
-            g.bRssi = g.rssi;
             memset(g.cap, 0, sizeof g.cap);
         }
         g.hot = 1u;
         g.gap = 0;
-        if (ay > g.bAf) g.bAf = ay;
-        if (g.rssi > g.bRssi) g.bRssi = g.rssi;
     }
 
     step = g.fsk ? STEP_FSK : STEP_OOK;
@@ -345,6 +364,30 @@ static void meterTick(void)
     g.afNow = g.afCol;
     if (g.afCol > g.afPk) g.afPk = g.afCol;
     g.afCol = 0;
+}
+
+/**
+ * Track the idle RSSI baseline and count jumps above it as wake attempts.
+ *
+ * The baseline follows quickly for the first SEED_MS, then slowly, and never
+ * while a jump is in progress.
+ */
+static void spikeTick(void)
+{
+    int32_t r = (int32_t)g.rssi * 16;
+    uint32_t now = g.A->ticks_ms();
+    if (!g.rbOk) {
+        g.rbQ = r;
+        g.rbOk = 1u;
+    }
+    if (g.rssi >= (int32_t)(g.rbQ >> 4) + SPIKE_DB) {
+        if (!g.spiking && g.wakes < 255u) g.wakes++;
+        g.spiking = 1u;
+        g.lastHot = now;
+        return;
+    }
+    g.spiking = 0;
+    g.rbQ += (r - g.rbQ) >> ((now - g.t0 < SEED_MS) ? 2 : 6);
 }
 
 /**
@@ -378,19 +421,174 @@ static void drawStatus(void)
 }
 
 /**
+ * Pick the wizard suggestion from the answers and the wake window counts.
+ *
+ * @return One of the V_ verdict ids.
+ */
+static uint8_t verdict(void)
+{
+    uint8_t dW = (uint8_t)(g.wakes - g.w0);
+    uint8_t dN = (uint8_t)(g.bursts - g.n0);
+    if (g.muted) return V_MUTE;
+    if (!g.hiss) return V_HISS;
+    if (dN) return V_OK;
+    if (!dW) return g.heard ? V_NORSSI : V_NORF;
+    return g.heard ? V_SLICER : V_NOAF;
+}
+
+/**
+ * Draw the current wizard step in the body.
+ */
+static void drawWiz(void)
+{
+    char str[34];
+    char *o;
+    const char *a = "HEARD A BURST?";
+    const char *b = "";
+    const char *c = "";
+    uint32_t now = g.A->ticks_ms();
+
+    if (g.wiz == WZ_HISS) {
+        a = "SPEAKER ON. HEAR HISS?";
+    } else if (g.wiz == WZ_WAKE) {
+        a = "WAKE A SENSOR NOW";
+        b = "MENU WHEN DONE";
+    } else if (g.wiz == WZ_DONE) {
+        const char *const *v = VERDICT + verdict() * 3u;
+        a = v[0];
+        b = v[1];
+        c = v[2];
+    }
+    o = put(str, a);
+    tiny(str, 0, 0, o);
+    o = put(str, b);
+    tiny(str, 0, 8, o);
+    o = put(str, c);
+    tiny(str, 0, 16, o);
+
+    if (g.wiz == WZ_WAKE) {
+        o = put(str, "W");
+        o = puti(o, (uint8_t)(g.wakes - g.w0));
+        o = put(o, " N");
+        o = puti(o, (uint8_t)(g.bursts - g.n0));
+        o = put(o, "  ");
+        o = puti(o, (int32_t)((WAKE_MS - (now - g.wizAt)) / 1000u));
+        o = put(o, "S LEFT");
+        tiny(str, 0, 32, o);
+    } else if (g.wiz == WZ_DONE) {
+        o = put(str, "MENU OR EXIT TO CLOSE");
+        tiny(str, 0, 48, o);
+    } else {
+        o = put(str, g.wizSel ? "   YES  > NO" : " > YES    NO");
+        tiny(str, 0, 32, o);
+        o = put(str, "ARROWS PICK, MENU OK");
+        tiny(str, 0, 48, o);
+    }
+}
+
+/**
+ * Open the wizard. A muted AF route skips straight to the verdict.
+ */
+static void wizOpen(void)
+{
+    g.spkWas = g.spk;
+    g.wizSel = 0;
+    g.hiss = 0;
+    g.heard = 0;
+    g.muted = ((g.A->bk_read(REG_47) >> 8) & 0x0fu) == 0;
+    if (g.muted) {
+        g.wiz = WZ_DONE;
+        return;
+    }
+    g.spk = 1u;
+    g.A->audio_path(true);
+    g.wiz = WZ_HISS;
+}
+
+/**
+ * Close the wizard and put the speaker back how it was.
+ */
+static void wizClose(void)
+{
+    g.wiz = WZ_OFF;
+    g.spk = g.spkWas;
+    g.A->audio_path(g.spk != 0u);
+}
+
+/**
+ * Start the wake window and snapshot the counters it is measured against.
+ */
+static void wizWake(void)
+{
+    g.wiz = WZ_WAKE;
+    g.w0 = g.wakes;
+    g.n0 = g.bursts;
+    g.wizAt = g.A->ticks_ms();
+}
+
+/**
+ * Move to the burst question when the wake window runs out.
+ */
+static void wizTick(void)
+{
+    if (g.wiz != WZ_WAKE || g.A->ticks_ms() - g.wizAt < WAKE_MS) return;
+    g.wiz = WZ_BURST;
+    g.wizSel = 0;
+    g.want = true;
+}
+
+/**
+ * Handle one key while the wizard is open.
+ *
+ * Arrows flip Yes / No, MENU confirms, and EXIT closes the wizard.
+ *
+ * @param key Key code from the firmware.
+ */
+static void wizKey(uint8_t key)
+{
+    if (key == APP_KEY_EXIT) {
+        wizClose();
+        return;
+    }
+    if (g.A->nav_dir(key)) {
+        g.wizSel ^= 1u;
+        return;
+    }
+    if (key != APP_KEY_MENU) return;
+    if (g.wiz == WZ_HISS) {
+        g.hiss = g.wizSel == 0;
+        if (g.hiss) wizWake();
+        else g.wiz = WZ_DONE;
+    } else if (g.wiz == WZ_WAKE) {
+        g.wiz = WZ_BURST;
+        g.wizSel = 0;
+    } else if (g.wiz == WZ_BURST) {
+        g.heard = g.wizSel == 0;
+        g.wiz = WZ_DONE;
+    } else {
+        wizClose();
+    }
+}
+
+/**
  * Draw the live text screen.
  */
 static void draw(void)
 {
-    char str[28];
+    char str[34];
     char *o;
     uint8_t (*fb)[128] = g.A->fb;
     uint8_t nb, p;
+    uint32_t now = g.A->ticks_ms();
     uint16_t r47 = g.A->bk_read(REG_47);
     uint16_t r33 = g.A->bk_read(REG_33);
 
     g.A->display_clear();
     drawStatus();
+    if (g.wiz) {
+        drawWiz();
+        return;
+    }
 
     o = str;
     *o++ = 'R';
@@ -424,15 +622,29 @@ static void draw(void)
     o = putHex(o, g.show, nb);
     tiny(str, 0, 16, o);
 
-    for (p = 3; p < 8u; p++) memset(fb[p], 0, 128);
+    o = str;
+    *o++ = 'T';
+    o = puti(o, (int32_t)((now - g.t0) / 1000u));
+    o = put(o, " Rb");
+    o = puti(o, g.rbQ >> 4);
+    o = put(o, " W");
+    o = puti(o, g.wakes);
+    o = put(o, " M");
+    o = puti(o, g.matched);
+    o = put(o, " L");
+    if (g.wakes) o = puti(o, (int32_t)((now - g.lastHot) / 1000u));
+    else *o++ = '-';
+    tiny(str, 0, 24, o);
+
+    for (p = 4; p < 8u; p++) memset(fb[p], 0, 128);
 }
 
 /**
- * Push the text rows to the LCD (drip when the speaker is on).
+ * Push the text rows to the LCD, dripped between samples when the firmware can.
  */
 static void pushLcd(void)
 {
-    if (g.spk && g.A->api_size >= 392u) {
+    if (g.A->api_size >= 392u) {
         g.lcd = g.A->lcd_feed(0);
         if (!g.lcd) {
             g.A->blit_status();
@@ -442,7 +654,7 @@ static void pushLcd(void)
     }
     g.lcd = false;
     g.A->blit_status();
-    if (g.spk) {
+    if (g.spk && !g.wiz) {
         g.A->blit_page(1);
         g.A->blit_page(2);
         g.A->blit_page(3);
@@ -450,36 +662,6 @@ static void pushLcd(void)
         return;
     }
     g.A->blit_full();
-}
-
-/**
- * Write the last burst when a USB host is holding the port open.
- */
-static void logBurst(void)
-{
-    char b[96];
-    char *o;
-    uint8_t nb;
-    if (g.A->api_size < 380u) return;
-    if ((g.A->serial_ctl(APP_SERIAL_USB, 0) & APP_SERIAL_HOST) == 0) return;
-    o = put(b, "dbg ");
-    o = puti(o, g.band433 ? 433 : 315);
-    *o++ = ' ';
-    *o++ = (char)(g.fsk ? 'F' : 'O');
-    o = put(o, " r=");
-    o = puti(o, g.logRssi);
-    o = put(o, " a=");
-    o = puti(o, g.logAf);
-    o = put(o, " n=");
-    o = puti(o, g.bursts);
-    o = put(o, " b=");
-    o = puti(o, g.showN);
-    *o++ = ' ';
-    nb = (uint8_t)(((g.showN > CAP_BITS ? CAP_BITS : g.showN) + 7u) >> 3);
-    if (nb > 16u) nb = 16u;
-    o = putHex(o, g.show, nb);
-    *o++ = '\n';
-    g.A->serial_write(APP_SERIAL_USB, b, (uint16_t)(o - b));
 }
 
 /**
@@ -495,9 +677,16 @@ static bool keys(void)
     if (!edge) return false;
     g.A->backlight_on();
     g.want = true;
+    if (g.wiz) {
+        wizKey(key);
+        return false;
+    }
     switch (key) {
         case APP_KEY_EXIT:
             return true;
+        case APP_KEY_MENU:
+            wizOpen();
+            break;
         case APP_KEY_1:
             g.spk ^= 1u;
             g.A->audio_path(g.spk != 0u);
@@ -518,7 +707,10 @@ static bool keys(void)
             g.afCol = 0;
             g.rssiPk = g.rssi;
             g.bursts = 0;
-            g.logged = 0;
+            g.wakes = 0;
+            g.matched = 0;
+            g.rbOk = 0;
+            g.t0 = g.A->ticks_ms();
             g.showN = 0;
             memset(g.show, 0, sizeof g.show);
             rearm();
@@ -541,7 +733,7 @@ static void listen(void)
 
     for (;;) {
         while ((int32_t)(clk() - next) < 0) {
-            if (g.spk && g.lcd && (int32_t)(next - clk()) > FEED_SLACK)
+            if (g.lcd && (int32_t)(next - clk()) > FEED_SLACK)
                 g.lcd = g.A->lcd_feed(1);
         }
         next += CYC_PER_SAMPLE;
@@ -551,6 +743,7 @@ static void listen(void)
             g.rssi = g.A->rssi_dbm();
             if (g.rssi > g.rssiPk) g.rssiPk = g.rssi;
             meterTick();
+            spikeTick();
             next = clk() + CYC_PER_SAMPLE;
         }
 
@@ -561,27 +754,23 @@ static void listen(void)
         }
 
         {
-            bool needUi = g.want;
-
-            if (!needUi
-                && ++g.refresh >= (uint8_t)(g.spk ? REFRESH_POLLS : REFRESH_FAST))
-                needUi = true;
-            if (!needUi && ++g.keyCnt < KEY_EVERY) continue;
+            /* Poll keys every KEY_EVERY samples and redraw every few polls.
+               A redraw per sample stalls the 38.4 kHz loop and loses bursts. */
+            if (!g.want && ++g.keyCnt < KEY_EVERY) continue;
             g.keyCnt = 0;
+            wizTick();
             if (keys()) break;
             g.A->backlight_update();
             g.A->backlight_on();
 
-            if (!g.want && !(!g.lcd && needUi)) continue;
+            if (!g.want
+                && (++g.refresh < (uint8_t)(g.spk ? REFRESH_POLLS : REFRESH_FAST) || g.lcd))
+                continue;
 
             g.refresh = 0;
             g.want = false;
             g.A->battery_sample();
             draw();
-            if (g.logged != g.bursts) {
-                logBurst();
-                g.logged = g.bursts;
-            }
             pushLcd();
             next = clk() + CYC_PER_SAMPLE;
         }
@@ -606,8 +795,14 @@ void app_main(const app_api_t *api)
     g.band433 = 1u;
     g.rssi = -130;
     g.rssiPk = -200;
-    g.logged = 0;
     g.bursts = 0;
+    g.wiz = WZ_OFF;
+    g.wakes = 0;
+    g.matched = 0;
+    g.spiking = 0;
+    g.rbOk = 0;
+    g.lcd = false;
+    g.t0 = api->ticks_ms();
     memset(g.show, 0, sizeof g.show);
     api->led(false);
     api->backlight_on();

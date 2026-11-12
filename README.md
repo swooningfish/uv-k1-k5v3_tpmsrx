@@ -11,6 +11,10 @@ was heard. There is no packet history, and the radio never transmits.
 Pick the app for the country the car was sold in. The United Kingdom and
 Europe share an app. The United States and Canada share another.
 
+All four apps are built from the same sources (`tpmsrx_app.c`, `dectpms.c`)
+with a compile flag (`TPMS_FLAVOUR_EU`, `_NA`, `_EU2`, `_NA2`) and matching
+asset strings. There are no separate regional `.c` trees.
+
 ## Which app
 
 | App | Where | Default band | Default mode | Cars | Signal |
@@ -117,17 +121,23 @@ A valid decode blinks the green LED, including while the backlight is off.
 
 ## Screen
 
-The status line shows `TPMS` (or `MENU`) on the left, and the band and demod
-just left of the battery.
+The status line shows `TPMS` (or `MENU`) on the left, the band and demod just
+left of the battery, and the battery percent plus icon on the right (same
+F4HWN / Temp 433 status battery).
 
-While no sensors have been heard, the screen shows the car types for that
-flavour, the demod each group needs (`FSK` or `OOK`), and the region.
+While no sensors have been heard, the listening line is
+`LISTENING <band> <region>`, then the car / protocol lines, then free-row
+shortcut hints when there are three or fewer sensors.
 
 ![Listening for a sensor](docs/main_screen.png)
 
 ![A few sensors](docs/list.png)
 
 ![Options menu](docs/menu.png)
+
+Waiting and options screens for every flavour (EU, NA, EU2, NA2), with the
+active band and FSK/OOK protocol on the status line, are in
+[docs/variants.md](docs/variants.md).
 
 | Mode setting | Status text |
 |---|---|

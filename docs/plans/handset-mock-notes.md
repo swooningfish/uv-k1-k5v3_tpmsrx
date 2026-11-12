@@ -12,7 +12,7 @@ mocks — not Temp 433’s green-grey LCD PNGs.
 
 | Area | Handset (UV Studio) | Mocks / code |
 |---|---|---|
-| Colors | BG `(228,223,235)`, ink `(41,32,62)` | `tools/mock_lcd.py` matches |
+| Colors | K5Viewer grey `#e5e0ec` / `#2a213f`, LCD pixel effect, pixel size 7 (6×7 cell, 5×6 dot) | `tools/mock_lcd.py` matches |
 | Battery icon | F4HWN 16×7 outline + 3 bars + tip | Same bitmap in mock; live app uses `draw_battery()` |
 | Menu capsules | All rows `print_inverse` (selected wider) | Matches `drawMenu` |
 | Listening layout on shot | Pre-change: `LISTENING` alone + region line, no free-row hints | Current `draw()`: merged `LISTENING <band> <region>` + hints |

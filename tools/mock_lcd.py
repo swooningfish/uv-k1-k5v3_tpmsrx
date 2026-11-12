@@ -38,11 +38,27 @@ FONT = (
 )
 
 W, H = 128, 64
-# Match K5Viewer / handset captures (lavender LCD), hard 4×4 blocks.
-# Temp 433 docs use green-grey; Greg's UK/EU shots are Arduco lavender.
-BG = (228, 223, 235)
-FG = (41, 32, 62)
-SCALE = 4
+# K5Viewer grey scheme (COLOR_SETS['g']) with the LCD pixel effect on,
+# pixel size 7. That is the 768×448 capture: each LCD pixel is a 6×7 cell
+# and the dot is the top-left 5×6. Off dots are the gap colour blended 5%
+# toward ink, which is the coarse grid on empty glass.
+# drawFrame(): px = x*(pixelSize-1), py = y*pixelSize,
+# dot = (pixelSize-1-pixelLcd) by (pixelSize-pixelLcd).
+BG = (0xE5, 0xE0, 0xEC)  # #e5e0ec, the gap
+FG = (0x2A, 0x21, 0x3F)  # #2a213f, a lit pixel
+PIXEL_SIZE = 7
+PIXEL_LCD = 1
+CELL_W = PIXEL_SIZE - 1
+CELL_H = PIXEL_SIZE
+DOT_W = PIXEL_SIZE - 1 - PIXEL_LCD
+DOT_H = PIXEL_SIZE - PIXEL_LCD
+
+
+def _blend(bg, fg, ratio):
+    return tuple(int(round(b + (f - b) * ratio)) for b, f in zip(bg, fg))
+
+
+OFF = _blend(BG, FG, 0.05)  # (220, 214, 227)
 
 # App | status band+mode | listening headline | car lines | free-row hints | menu rows
 VARIANTS = {
@@ -243,28 +259,32 @@ def scene_list():
 
 
 def write_png(path, fb):
-    """Upscale 1 LCD pixel → SCALE×SCALE solid block.
+    """Paint one K5Viewer cell per LCD pixel.
 
-    Indexed 2-colour PNG (UV Studio lavender palette): every output byte is 0 or 1,
-    so viewers cannot invent grey anti-alias between ink and background.
+    The canvas is the gap colour. Each cell then gets a DOT_W×DOT_H rectangle
+    in its top-left: ink if that LCD pixel is on, the 5% off-dot if it is off.
+    Indexed 3-colour PNG so a viewer cannot anti-alias the grid.
     """
-    sw, sh = W * SCALE, H * SCALE
-    # Filter None + one index byte per pixel.
+    sw, sh = W * CELL_W, H * CELL_H
+    # 0 = gap, 1 = off-dot, 2 = ink.
     raw = bytearray()
     for y in range(sh):
         raw.append(0)
-        sy = y // SCALE
-        row = fb[sy * W : (sy + 1) * W]
+        in_dot_y = (y % CELL_H) < DOT_H
+        row = fb[(y // CELL_H) * W : (y // CELL_H + 1) * W]
         for x in range(sw):
-            raw.append(1 if row[x // SCALE] else 0)
+            if in_dot_y and (x % CELL_W) < DOT_W:
+                raw.append(2 if row[x // CELL_W] else 1)
+            else:
+                raw.append(0)
 
     def chunk(tag, data):
         return struct.pack(">I", len(data)) + tag + data + struct.pack(
             ">I", zlib.crc32(tag + data) & 0xFFFFFFFF
         )
 
-    # PLTE: index 0 = BG, 1 = FG (RGB triples).
-    plte = bytes(BG) + bytes(FG)
+    # PLTE: index 0 = gap, 1 = off-dot, 2 = ink.
+    plte = bytes(BG) + bytes(OFF) + bytes(FG)
     png = b"\x89PNG\r\n\x1a\n"
     png += chunk(b"IHDR", struct.pack(">IIBBBBB", sw, sh, 8, 3, 0, 0, 0))
     png += chunk(b"PLTE", plte)

@@ -125,8 +125,9 @@ def inverse(fb, s, x, line, end_x, status_bar):
     text(fb, x, y0 + 1, s, 0)
 
 
-# Status-line battery: F4HWN / UV Studio 16×7 outline (3 bars, tip on the right).
-# Pixel-identical to Greg's K5Viewer listening shot. Percent is gFont3x5 at left.
+# Status-line battery: F4HWN BITMAP_BatteryLevel1 (16×7, 3 bars, tip on the right).
+# Percent uses gFontSmall via UI_PrintStringSmallBufferNormal (not gFont3x5):
+# 6 px glyph + 1 px advance = 7, LSB = top of the status page — same as the radio.
 _BATTERY = (
     0b0011111111111111,
     0b1100000000000001,
@@ -137,6 +138,34 @@ _BATTERY = (
     0b0011111111111111,
 )
 
+# gFontSmall digits + '%' only (App/font.c). Index is ASCII; 6 columns, bits 0..6.
+_FONT_SMALL = {
+    "%": (0x63, 0x13, 0x08, 0x04, 0x62, 0x61),
+    "0": (0x3E, 0x41, 0x41, 0x41, 0x41, 0x3E),
+    "1": (0x00, 0x40, 0x42, 0x7F, 0x40, 0x40),
+    "2": (0x62, 0x51, 0x51, 0x49, 0x49, 0x46),
+    "3": (0x22, 0x41, 0x49, 0x49, 0x49, 0x36),
+    "4": (0x18, 0x14, 0x12, 0x11, 0x7F, 0x10),
+    "5": (0x27, 0x45, 0x45, 0x45, 0x45, 0x39),
+    "6": (0x3E, 0x49, 0x49, 0x49, 0x49, 0x32),
+    "7": (0x01, 0x01, 0x71, 0x09, 0x05, 0x03),
+    "8": (0x36, 0x49, 0x49, 0x49, 0x49, 0x36),
+    "9": (0x46, 0x49, 0x49, 0x49, 0x29, 0x1E),
+}
+
+
+def text_small(fb, x, s):
+    """UI_PrintStringSmallBufferNormal: 7 px/char, glyph columns at x+1..x+6."""
+    for i, ch in enumerate(s):
+        cols = _FONT_SMALL.get(ch)
+        if cols is None:
+            continue
+        base = x + i * 7 + 1
+        for c, bits in enumerate(cols):
+            for row in range(7):
+                if bits & (1 << row):
+                    px(fb, base + c, row, 1)
+
 
 def battery(fb, pct="78%"):
     # Icon flush right (x=112..127), matching ST7565_DrawLine(LCD_WIDTH - 16, …).
@@ -144,8 +173,8 @@ def battery(fb, pct="78%"):
         for i in range(16):
             if bits & (1 << (15 - i)):
                 px(fb, 112 + i, y, 1)
-    # Percent left of the icon (same 3×5 face as the rest of the status line).
-    text(fb, 112 - len(pct) * 4, 1, pct)
+    # Percent left of the icon — F4HWN UI_DrawStatusBattery (7 * strlen).
+    text_small(fb, 112 - 7 * len(pct), pct)
 
 
 def status(fb, title, band):

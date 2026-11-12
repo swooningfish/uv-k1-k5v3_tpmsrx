@@ -324,17 +324,23 @@ static void drawMenu(const char *ui)
     tiny(str, 2, 41, o);
     o = put(str, ui + T_HELP2);
     tiny(str, 2, 47, o);
+    o = put(str, ui + T_HELP3);
+    {
+        unsigned hw = (unsigned)(o - str) * 4u;
+        uint8_t hx = (uint8_t)((hw >= 126u) ? 2u : (126u - hw));
+        tiny(str, hx, 47, o);
+    }
 }
 
-/* Free-row key hints (TEMP433-style spare lines, no PIECES table). */
-static void drawListHints(const char *ui, uint8_t y)
+/* Listening key strip: right-aligned on the MENU capsule baseline (body line 6). */
+static void drawListHints(const char *ui)
 {
     char str[28];
-    char *o;
-    o = put(str, ui + T_HINT1);
-    tiny(str, 2, y, o);
-    o = put(str, ui + T_HINT2);
-    tiny(str, 2, (uint8_t)(y + 6u), o);
+    char *o = put(str, ui + T_HINT);
+    unsigned w = (unsigned)(o - str) * 4u;
+    uint8_t x = (uint8_t)((w >= 126u) ? 2u : (126u - w));
+    /* print_inverse on line 6 draws glyphs at y = 8+6*8+1 = 57. */
+    tiny(str, x, 57, o);
 }
 
 __attribute__((noinline))
@@ -370,11 +376,11 @@ static void draw(const char *ui)
             tinyCenter(str, y, o);
             y = (uint8_t)(y + 8u);
         }
-        drawListHints(ui, y);
         o = put(str, ui + T_MENU);
         *o = '\0';
         w = (unsigned)(o - str) * 4u;
         g.A->print_inverse(str, 2, 6, false, true, (uint8_t)(2u + w));
+        drawListHints(ui);
         return;
     }
     for (uint8_t i = 0; i < g.nRows && i < ROWS; i++) {
@@ -396,9 +402,9 @@ static void draw(const char *ui)
         o = putAge(o, now - r->t);
         tiny(str, 0, (uint8_t)(8u + i * 6u), o);
     }
-    /* Spare rows  after 0–3 sensors: same free-row shortcuts. */
+    /* Key strip on the MENU baseline when the list is short. */
     if (g.nRows <= 3u)
-        drawListHints(ui, (uint8_t)(8u + g.nRows * 6u));
+        drawListHints(ui);
 }
 
 #if !TPMS_LOCK_MODE

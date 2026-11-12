@@ -51,7 +51,7 @@ VARIANTS = {
         "status": "433.92 FSK",
         "listen": "LISTENING 433.92 UK/EU",
         "cars": ("FSK: FORD|TOYOTA", "OOK: SCHRADER"),
-        "hints": ("2 BAND  * MODE", "0 LIGHT  MENU"),
+        "hints": "2 BAND  * MODE  0 LIGHT",
         "menu": [(">BAND 433.92", 100), (" MODE FSK", 78), (" CLEAR", 78)],
         "menu_status": "433.92 FSK",
     },
@@ -60,7 +60,7 @@ VARIANTS = {
         "status": "315.00 FSK",
         "listen": "LISTENING 315.00 US/CA",
         "cars": ("FSK: FORD|TOYOTA", "OOK: SCHRADER"),
-        "hints": ("2 BAND  * MODE", "0 LIGHT  MENU"),
+        "hints": "2 BAND  * MODE  0 LIGHT",
         "menu": [(">BAND 315.00", 100), (" MODE FSK", 78), (" CLEAR", 78)],
         "menu_status": "315.00 FSK",
     },
@@ -69,7 +69,7 @@ VARIANTS = {
         "status": "433.92 OOK",
         "listen": "LISTENING 433.92 UK/EU",
         "cars": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI"),
-        "hints": ("0 LIGHT", "MENU"),
+        "hints": "0 LIGHT",
         "menu": [(">CLEAR", 100)],
         "menu_status": "433.92 OOK",
     },
@@ -78,7 +78,7 @@ VARIANTS = {
         "status": "315.00 OOK",
         "listen": "LISTENING 315.00 US/CA",
         "cars": ("OOK: CHEVROLET|GM", "OOK: SUBARU|NISSAN"),
-        "hints": ("2 BAND", "0 LIGHT  MENU"),
+        "hints": "2 BAND  0 LIGHT",
         "menu": [(">BAND 315.00", 100), (" CLEAR", 78)],
         "menu_status": "315.00 OOK",
     },
@@ -188,19 +188,23 @@ def center(fb, y, s):
     text(fb, max(0, (W - len(s) * 4) // 2), y, s)
 
 
+def hint_strip(fb, s):
+    """Right-aligned on the MENU capsule baseline (print_inverse line 6 → y=57)."""
+    w = len(s) * 4
+    x = 2 if w >= 126 else 126 - w
+    text(fb, x, 57, s)
+
+
 def scene_waiting(v):
     fb = new_fb()
     status(fb, "TPMS", v["status"])
     center(fb, 8, v["listen"])
     center(fb, 16, v["cars"][0])
-    y = 24
     if v["cars"][1]:
-        center(fb, y, v["cars"][1])
-        y += 8
-    text(fb, 2, y, v["hints"][0])
-    text(fb, 2, y + 6, v["hints"][1])
+        center(fb, 24, v["cars"][1])
     label = "MENU"
     inverse(fb, label, 2, 6, 2 + len(label) * 4, False)
+    hint_strip(fb, v["hints"])
     return fb
 
 
@@ -210,12 +214,14 @@ def scene_menu(v):
     for i, (s, end) in enumerate(v["menu"]):
         inverse(fb, s, 2, i + 1, end, False)
     text(fb, 2, 8 + 41, "UP/DN SELECT")
-    text(fb, 2, 8 + 47, "MENU CHANGE  EXIT BACK")
+    text(fb, 2, 8 + 47, "MENU CHANGE")
+    exit_s = "EXIT BACK"
+    text(fb, 126 - len(exit_s) * 4, 8 + 47, exit_s)
     return fb
 
 
 def scene_list():
-    """EU list with three sensors and free-row shortcuts underneath."""
+    """EU list with three sensors; key strip on the MENU baseline."""
     fb = new_fb()
     status(fb, "TPMS", "433.92 FSK")
     rows = (
@@ -225,8 +231,9 @@ def scene_list():
     )
     for i, s in enumerate(rows):
         text(fb, 0, 8 + i * 6, s)
-    text(fb, 2, 8 + 3 * 6, "2 BAND  * MODE")
-    text(fb, 2, 8 + 3 * 6 + 6, "0 LIGHT  MENU")
+    label = "MENU"
+    inverse(fb, label, 2, 6, 2 + len(label) * 4, False)
+    hint_strip(fb, "2 BAND  * MODE  0 LIGHT")
     return fb
 
 

@@ -49,13 +49,15 @@ UI = [
     ("T_MODE", "MODE"),
     ("T_CLR", "CLEAR"),
     ("T_HELP1", "UP/DN SELECT"),
-    ("T_HELP2", "MENU CHANGE  EXIT BACK"),
-    # Free-row shortcuts on the main list (0–3 sensors). Omit locked keys.
+    ("T_HELP2", "MENU CHANGE"),
+    ("T_HELP3", "EXIT BACK"),
+    # Listening-screen key strip (no MENU — that is the bottom-left capsule).
+    # Omit band/mode when the flavour locks them.
     *{
-        "eu": [("T_HINT1", "2 BAND  * MODE"), ("T_HINT2", "0 LIGHT  MENU")],
-        "na": [("T_HINT1", "2 BAND  * MODE"), ("T_HINT2", "0 LIGHT  MENU")],
-        "eu2": [("T_HINT1", "0 LIGHT"), ("T_HINT2", "MENU")],
-        "na2": [("T_HINT1", "2 BAND"), ("T_HINT2", "0 LIGHT  MENU")],
+        "eu": [("T_HINT", "2 BAND  * MODE  0 LIGHT")],
+        "na": [("T_HINT", "2 BAND  * MODE  0 LIGHT")],
+        "eu2": [("T_HINT", "0 LIGHT")],
+        "na2": [("T_HINT", "2 BAND  0 LIGHT")],
     }[os.environ.get("FLAVOUR", "eu")],
 ]
 a = Assets("TPMS_RX")

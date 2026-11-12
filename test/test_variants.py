@@ -36,10 +36,10 @@ def flavour_ui(flavour: str) -> dict[str, str]:
         "na2": ("OOK: CHEVROLET|GM", "OOK: SUBARU|NISSAN"),
     }
     hints = {
-        "eu": ("2 BAND  * MODE", "0 LIGHT  MENU"),
-        "na": ("2 BAND  * MODE", "0 LIGHT  MENU"),
-        "eu2": ("0 LIGHT", "MENU"),
-        "na2": ("2 BAND", "0 LIGHT  MENU"),
+        "eu": "2 BAND  * MODE  0 LIGHT",
+        "na": "2 BAND  * MODE  0 LIGHT",
+        "eu2": "0 LIGHT",
+        "na2": "2 BAND  0 LIGHT",
     }
     band = "433.92" if flavour in ("eu", "eu2") else "315.00"
     mode = "OOK" if flavour in ("eu2", "na2") else "FSK"
@@ -47,8 +47,7 @@ def flavour_ui(flavour: str) -> dict[str, str]:
         "region": regions[flavour],
         "cars1": cars[flavour][0],
         "cars2": cars[flavour][1],
-        "hint1": hints[flavour][0],
-        "hint2": hints[flavour][1],
+        "hint": hints[flavour],
         "band": band,
         "mode": mode,
         "listen": f"LISTENING {band} {regions[flavour]}",
@@ -86,7 +85,8 @@ def test_layout_source() -> None:
     print("Main-list layout (tpmsrx_app.c)")
     src = read("tpmsrx_app.c")
     check("drawListHints" in src, "drawListHints helper")
-    check("T_HINT1" in src and "T_HINT2" in src, "uses T_HINT1 / T_HINT2")
+    check("T_HINT" in src and "T_HINT1" not in src and "T_HINT2" not in src,
+          "uses single T_HINT strip")
     check('put(str, ui + T_WAIT)' in src and "putBand(o)" in src and "T_REGION" in src,
           "LISTENING line merges band and region")
     check("g.nRows <= 3u" in src, "free-row hints when 0–3 sensors")
@@ -97,18 +97,19 @@ def test_layout_source() -> None:
 def test_assets_and_flavours() -> None:
     print("Flavour assets (gen_assets.py)")
     assets = read("gen_assets.py")
-    check("T_HINT1" in assets and "T_HINT2" in assets, "hint strings defined")
+    check('"T_HINT"' in assets and "T_HINT1" not in assets and "T_HINT2" not in assets,
+          "hint strings defined")
     for fl in ("eu", "na", "eu2", "na2"):
         ui = flavour_ui(fl)
-        check(ui["hint1"] in assets, f"{fl} hint1 text in gen_assets")
+        check(ui["hint"] in assets, f"{fl} hint text in gen_assets")
         check(ui["region"] in assets, f"{fl} region in gen_assets")
         # Headline length fits 128 px tiny font (4 px/glyph).
         check(len(ui["listen"]) * 4 <= 128, f"{fl} listening line fits width: {ui['listen']}")
         # Locked flavours must not advertise dead band/mode keys.
         if fl == "eu2":
-            check("*" not in ui["hint1"] and "2 BAND" not in ui["hint1"], "eu2 hints omit band/mode")
+            check("*" not in ui["hint"] and "2 BAND" not in ui["hint"], "eu2 hints omit band/mode")
         if fl == "na2":
-            check("*" not in ui["hint1"] and "*" not in ui["hint2"], "na2 hints omit mode")
+            check("*" not in ui["hint"] and "MODE" not in ui["hint"], "na2 hints omit mode")
 
 
 def test_build_flavours() -> None:

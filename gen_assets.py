@@ -50,6 +50,13 @@ UI = [
     ("T_CLR", "CLEAR"),
     ("T_HELP1", "UP/DN SELECT"),
     ("T_HELP2", "MENU CHANGE  EXIT BACK"),
+    # Free-row shortcuts on the main list (0–3 sensors). Omit locked keys.
+    *{
+        "eu": [("T_HINT1", "2 BAND  * MODE"), ("T_HINT2", "0 LIGHT  MENU")],
+        "na": [("T_HINT1", "2 BAND  * MODE"), ("T_HINT2", "0 LIGHT  MENU")],
+        "eu2": [("T_HINT1", "0 LIGHT"), ("T_HINT2", "MENU")],
+        "na2": [("T_HINT1", "2 BAND"), ("T_HINT2", "0 LIGHT  MENU")],
+    }[os.environ.get("FLAVOUR", "eu")],
 ]
 a = Assets("TPMS_RX")
 ui_size = 0

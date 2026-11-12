@@ -1,4 +1,4 @@
-﻿/* Copyright 2026 — Apache-2.0
+/* Copyright 2026 — Apache-2.0
  * TPMS RX: Ford / Toyota FSK and Schrader OOK on PA4 at 38.4 kHz.
  */
 #include <stdint.h>
@@ -326,6 +326,17 @@ static void drawMenu(const char *ui)
     tiny(str, 2, 47, o);
 }
 
+/* Free-row key hints (TEMP433-style spare lines, no PIECES table). */
+static void drawListHints(const char *ui, uint8_t y)
+{
+    char str[28];
+    char *o;
+    o = put(str, ui + T_HINT1);
+    tiny(str, 2, y, o);
+    o = put(str, ui + T_HINT2);
+    tiny(str, 2, (uint8_t)(y + 6u), o);
+}
+
 __attribute__((noinline))
 static void draw(const char *ui)
 {
@@ -343,21 +354,23 @@ static void draw(const char *ui)
 
     if (!g.nRows) {
         unsigned w;
+        uint8_t y;
+        /* "LISTENING 433.92 UK/EU" — band + region on one line. */
         o = put(str, ui + T_WAIT);
-        tinyCenter(str, 10, o);
+        *o++ = ' ';
+        o = putBand(o);
+        *o++ = ' ';
+        o = put(o, ui + T_REGION);
+        tinyCenter(str, 8, o);
         o = put(str, ui + T_CARS1);
-        tinyCenter(str, 22, o);
-        {
-            uint8_t y = 30;
-            if (ui[T_CARS2]) {
-                o = put(str, ui + T_CARS2);
-                tinyCenter(str, y, o);
-                y = (uint8_t)(y + 8u);
-            }
-            o = put(str, ui + T_REGION);
+        tinyCenter(str, 16, o);
+        y = 24;
+        if (ui[T_CARS2]) {
+            o = put(str, ui + T_CARS2);
             tinyCenter(str, y, o);
+            y = (uint8_t)(y + 8u);
         }
-        /* Last body row, left edge. */
+        drawListHints(ui, y);
         o = put(str, ui + T_MENU);
         *o = '\0';
         w = (unsigned)(o - str) * 4u;
@@ -383,6 +396,9 @@ static void draw(const char *ui)
         o = putAge(o, now - r->t);
         tiny(str, 0, (uint8_t)(8u + i * 6u), o);
     }
+    /* Spare rows  after 0–3 sensors: same free-row shortcuts. */
+    if (g.nRows <= 3u)
+        drawListHints(ui, (uint8_t)(8u + g.nRows * 6u));
 }
 
 #if !TPMS_LOCK_MODE

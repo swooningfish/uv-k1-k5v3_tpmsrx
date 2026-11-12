@@ -38,9 +38,51 @@ FONT = (
 )
 
 W, H = 128, 64
-BG = (228, 224, 236)
-FG = (28, 20, 48)
+# Match K5Viewer / handset captures (lavender LCD), hard 4×4 blocks.
+# Temp 433 docs use green-grey; Greg's UK/EU shots are Arduco lavender.
+BG = (228, 223, 235)
+FG = (41, 32, 62)
 SCALE = 4
+
+# App | status band+mode | listening headline | car lines | free-row hints | menu rows
+VARIANTS = {
+    "eu": {
+        "app": "TPMS EU",
+        "status": "433.92 FSK",
+        "listen": "LISTENING 433.92 UK/EU",
+        "cars": ("FSK: FORD|TOYOTA", "OOK: SCHRADER"),
+        "hints": ("2 BAND  * MODE", "0 LIGHT  MENU"),
+        "menu": [(">BAND 433.92", 100), (" MODE FSK", 78), (" CLEAR", 78)],
+        "menu_status": "433.92 FSK",
+    },
+    "na": {
+        "app": "TPMS NA",
+        "status": "315.00 FSK",
+        "listen": "LISTENING 315.00 US/CA",
+        "cars": ("FSK: FORD|TOYOTA", "OOK: SCHRADER"),
+        "hints": ("2 BAND  * MODE", "0 LIGHT  MENU"),
+        "menu": [(">BAND 315.00", 100), (" MODE FSK", 78), (" CLEAR", 78)],
+        "menu_status": "315.00 FSK",
+    },
+    "eu2": {
+        "app": "TPMS EU2",
+        "status": "433.92 OOK",
+        "listen": "LISTENING 433.92 UK/EU",
+        "cars": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI"),
+        "hints": ("0 LIGHT", "MENU"),
+        "menu": [(">CLEAR", 100)],
+        "menu_status": "433.92 OOK",
+    },
+    "na2": {
+        "app": "TPMS NA2",
+        "status": "315.00 OOK",
+        "listen": "LISTENING 315.00 US/CA",
+        "cars": ("OOK: CHEVROLET|GM", "OOK: SUBARU|NISSAN"),
+        "hints": ("2 BAND", "0 LIGHT  MENU"),
+        "menu": [(">BAND 315.00", 100), (" CLEAR", 78)],
+        "menu_status": "315.00 OOK",
+    },
+}
 
 
 def new_fb():
@@ -77,18 +119,33 @@ def fill(fb, x0, y0, x1, y1, ink):
             px(fb, x, y, ink)
 
 
-def inverse(fb, s, x, line, end_x, status):
-    y0 = line * 8 if status else 8 + line * 8
+def inverse(fb, s, x, line, end_x, status_bar):
+    y0 = line * 8 if status_bar else 8 + line * 8
     fill(fb, x, y0, end_x, y0 + 8, 1)
     text(fb, x, y0 + 1, s, 0)
 
 
-def battery(fb):
-    # Percentage sits in the 48 px reserved beside the icon.
-    text(fb, 88, 1, "96%")
-    fill(fb, 112, 1, 125, 6, 1)
-    fill(fb, 113, 2, 116, 5, 0)
-    fill(fb, 125, 2, 127, 5, 1)
+# Status-line battery: F4HWN / UV Studio 16×7 outline (3 bars, tip on the right).
+# Pixel-identical to Greg's K5Viewer listening shot. Percent is gFont3x5 at left.
+_BATTERY = (
+    0b0011111111111111,
+    0b1100000000000001,
+    0b1000001101101101,
+    0b1000001101101101,
+    0b1000001101101101,
+    0b1100000000000001,
+    0b0011111111111111,
+)
+
+
+def battery(fb, pct="78%"):
+    # Icon flush right (x=112..127), matching ST7565_DrawLine(LCD_WIDTH - 16, …).
+    for y, bits in enumerate(_BATTERY):
+        for i in range(16):
+            if bits & (1 << (15 - i)):
+                px(fb, 112 + i, y, 1)
+    # Percent left of the icon (same 3×5 face as the rest of the status line).
+    text(fb, 112 - len(pct) * 4, 1, pct)
 
 
 def status(fb, title, band):
@@ -102,27 +159,26 @@ def center(fb, y, s):
     text(fb, max(0, (W - len(s) * 4) // 2), y, s)
 
 
-def scene_waiting():
+def scene_waiting(v):
     fb = new_fb()
-    status(fb, "TPMS", "433.92 FSK")
-    center(fb, 8 + 10, "LISTENING")
-    center(fb, 8 + 22, "FSK: FORD|TOYOTA")
-    center(fb, 8 + 30, "OOK: SCHRADER")
-    center(fb, 8 + 38, "UK/EU")
+    status(fb, "TPMS", v["status"])
+    center(fb, 8, v["listen"])
+    center(fb, 16, v["cars"][0])
+    y = 24
+    if v["cars"][1]:
+        center(fb, y, v["cars"][1])
+        y += 8
+    text(fb, 2, y, v["hints"][0])
+    text(fb, 2, y + 6, v["hints"][1])
     label = "MENU"
     inverse(fb, label, 2, 6, 2 + len(label) * 4, False)
     return fb
 
 
-def scene_menu():
+def scene_menu(v):
     fb = new_fb()
-    status(fb, "MENU", "433.92 FSK")
-    rows = [
-        (">BAND 433.92", 100),
-        (" MODE AUTO", 78),
-        (" CLEAR", 78),
-    ]
-    for i, (s, end) in enumerate(rows):
+    status(fb, "MENU", v["menu_status"])
+    for i, (s, end) in enumerate(v["menu"]):
         inverse(fb, s, 2, i + 1, end, False)
     text(fb, 2, 8 + 41, "UP/DN SELECT")
     text(fb, 2, 8 + 47, "MENU CHANGE  EXIT BACK")
@@ -130,6 +186,7 @@ def scene_menu():
 
 
 def scene_list():
+    """EU list with three sensors and free-row shortcuts underneath."""
     fb = new_fb()
     status(fb, "TPMS", "433.92 FSK")
     rows = (
@@ -138,23 +195,38 @@ def scene_list():
         "SCHR 003A38B2 48psi 12C -81 2m",
     )
     for i, s in enumerate(rows):
-        text(fb, 0, 8 + 8 + i * 6, s)
+        text(fb, 0, 8 + i * 6, s)
+    text(fb, 2, 8 + 3 * 6, "2 BAND  * MODE")
+    text(fb, 2, 8 + 3 * 6 + 6, "0 LIGHT  MENU")
     return fb
 
 
 def write_png(path, fb):
+    """Upscale 1 LCD pixel → SCALE×SCALE solid block.
+
+    Indexed 2-colour PNG (UV Studio lavender palette): every output byte is 0 or 1,
+    so viewers cannot invent grey anti-alias between ink and background.
+    """
     sw, sh = W * SCALE, H * SCALE
+    # Filter None + one index byte per pixel.
     raw = bytearray()
     for y in range(sh):
         raw.append(0)
         sy = y // SCALE
+        row = fb[sy * W : (sy + 1) * W]
         for x in range(sw):
-            ink = fb[sy * W + (x // SCALE)]
-            raw.extend(FG if ink else BG)
+            raw.append(1 if row[x // SCALE] else 0)
+
     def chunk(tag, data):
-        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(
+            ">I", zlib.crc32(tag + data) & 0xFFFFFFFF
+        )
+
+    # PLTE: index 0 = BG, 1 = FG (RGB triples).
+    plte = bytes(BG) + bytes(FG)
     png = b"\x89PNG\r\n\x1a\n"
-    png += chunk(b"IHDR", struct.pack(">IIBBBBB", sw, sh, 8, 2, 0, 0, 0))
+    png += chunk(b"IHDR", struct.pack(">IIBBBBB", sw, sh, 8, 3, 0, 0, 0))
+    png += chunk(b"PLTE", plte)
     png += chunk(b"IDAT", zlib.compress(bytes(raw), 9))
     png += chunk(b"IEND", b"")
     with open(path, "wb") as f:
@@ -164,11 +236,22 @@ def write_png(path, fb):
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     docs = os.path.join(root, "docs")
-    os.makedirs(docs, exist_ok=True)
-    write_png(os.path.join(docs, "main_screen.png"), scene_waiting())
-    write_png(os.path.join(docs, "menu.png"), scene_menu())
+    variants = os.path.join(docs, "variants")
+    os.makedirs(variants, exist_ok=True)
+
+    eu = VARIANTS["eu"]
+    write_png(os.path.join(docs, "main_screen.png"), scene_waiting(eu))
+    write_png(os.path.join(docs, "menu.png"), scene_menu(eu))
     write_png(os.path.join(docs, "list.png"), scene_list())
-    print("wrote docs/main_screen.png docs/menu.png docs/list.png")
+
+    written = ["docs/main_screen.png", "docs/menu.png", "docs/list.png"]
+    for key, v in VARIANTS.items():
+        w = f"docs/variants/{key}_waiting.png"
+        m = f"docs/variants/{key}_menu.png"
+        write_png(os.path.join(root, w), scene_waiting(v))
+        write_png(os.path.join(root, m), scene_menu(v))
+        written.extend([w, m])
+    print("wrote " + " ".join(written))
 
 
 if __name__ == "__main__":

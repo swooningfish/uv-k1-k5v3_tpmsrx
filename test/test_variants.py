@@ -11,6 +11,11 @@ fails = 0
 
 
 def check(cond: bool, msg: str) -> None:
+    """Record one host check.
+
+    @param cond True when the check passed.
+    @param msg Text printed for this check.
+    """
     global fails
     if cond:
         print(f"  ok  {msg}")
@@ -20,12 +25,21 @@ def check(cond: bool, msg: str) -> None:
 
 
 def read(path: str) -> str:
+    """Read a repository file as UTF-8 text.
+
+    @param path Path relative to the repository root.
+    @return File contents.
+    """
     with open(os.path.join(ROOT, path), encoding="utf-8") as f:
         return f.read()
 
 
 def flavour_ui(flavour: str) -> dict[str, str]:
-    """Minimal mirror of gen_assets.py string tables for one FLAVOUR."""
+    """Mirror the gen_assets.py strings for one flavour.
+
+    @param flavour Flavour key: eu, na, eu2, or na2.
+    @return Region, car lines, hint, band, mode, and the listening line.
+    """
     os.environ["FLAVOUR"] = flavour
     # Re-exec the same mapping without importing the SDK Assets class.
     regions = {"eu": "UK/EU", "na": "US/CA", "eu2": "UK/EU", "na2": "US/CA"}
@@ -55,10 +69,17 @@ def flavour_ui(flavour: str) -> dict[str, str]:
 
 
 def test_rf_source() -> None:
+    """Check the RF parking sequence in tpmsrx_app.c."""
     print("RF path (tpmsrx_app.c)")
     src = read("tpmsrx_app.c")
-    check(re.search(r"#define\s+FREQ_315\s+31500000u", src) is not None, "FREQ_315 is 31500000 (×10 Hz)")
-    check(re.search(r"#define\s+FREQ_433\s+43392000u", src) is not None, "FREQ_433 is 43392000 (×10 Hz)")
+    check(
+        re.search(r"#define\s+FREQ_315\s+31500000u", src) is not None,
+        "FREQ_315 is 31500000 (×10 Hz)",
+    )
+    check(
+        re.search(r"#define\s+FREQ_433\s+43392000u", src) is not None,
+        "FREQ_433 is 43392000 (×10 Hz)",
+    )
     check("F_FIRST" not in src and "N_PTS" not in src, "no TEMP433 thermometer sweep constants")
     # Mute must be cleared after PLL pulse: tones_off_rx then AF owner.
     m = re.search(
@@ -77,11 +98,20 @@ def test_rf_source() -> None:
         check(i_tones >= 0 and i_af > i_tones, "tones_off_rx before REG_47 / set_af")
         check("set_agc(false)" in body, "fixed AGC while listening")
         check("REG_2B" in body and "REG_73" in body and "REG_43" in body, "shared IF regs")
-        check("REG_47_BYPASS" in body and "APP_AF_AM" in body, "FSK bypass and OOK AM both programmed")
-    check("bk_write(REG_2B, r2b)" in src and "set_agc(true)" in src, "restore REG_2B and AGC on exit")
+        check(
+            "REG_47_BYPASS" in body and "APP_AF_AM" in body,
+            "FSK bypass and OOK AM both programmed",
+        )
+    check(
+        "bk_write(REG_2B, r2b)" in src and "set_agc(true)" in src,
+        "restore REG_2B and AGC on exit",
+    )
+    check("audio_path(g.spk" in src and "APP_KEY_1" in src, "speaker toggle on the list apps")
+    check("tpms_parse_" not in src or "dectpms" in src, "list app still decodes")
 
 
 def test_layout_source() -> None:
+    """Check the listening-screen layout in tpmsrx_app.c."""
     print("Main-list layout (tpmsrx_app.c)")
     src = read("tpmsrx_app.c")
     check("drawListHints" in src, "drawListHints helper")
@@ -99,6 +129,7 @@ def test_layout_source() -> None:
 
 
 def test_assets_and_flavours() -> None:
+    """Check flavour strings and that locked apps omit dead keys."""
     print("Flavour assets (gen_assets.py)")
     assets = read("gen_assets.py")
     check('"T_HINT"' in assets and "T_HINT1" not in assets and "T_HINT2" not in assets,
@@ -116,7 +147,20 @@ def test_assets_and_flavours() -> None:
             check("*" not in ui["hint"] and "MODE" not in ui["hint"], "na2 hints omit mode")
 
 
+def test_dbg_app() -> None:
+    """Check that the burst recorder does not decode and is built."""
+    print("Burst recorder (tpmsdbg_app.c)")
+    src = read("tpmsdbg_app.c")
+    sh = read("build.sh")
+    check("tpms_parse_" not in src, "recorder does not decode TPMS fields")
+    check("REG_47_BYPASS" in src and "APP_AF_AM" in src, "same FSK bypass and OOK AM routes")
+    check("APP_KEY_1" in src and "audio_path(g.spk" in src, "speaker toggle")
+    check("serial_write" in src and "wf[128]" in src, "USB line and waterfall")
+    check('tpmsdbg_app.c' in sh and 'TPMS DBG' in sh, "build.sh packs TPMS DBG")
+
+
 def test_build_flavours() -> None:
+    """Check that build.sh builds every flavour from one source."""
     print("Build flavours (build.sh)")
     sh = read("build.sh")
     for name in ("TPMS_FLAVOUR_EU", "TPMS_FLAVOUR_NA", "TPMS_FLAVOUR_EU2", "TPMS_FLAVOUR_NA2"):
@@ -125,10 +169,15 @@ def test_build_flavours() -> None:
 
 
 def main() -> int:
+    """Run the variant checks.
+
+    @return Zero when every check passed.
+    """
     print("variant / RF / layout host checks")
     test_rf_source()
     test_layout_source()
     test_assets_and_flavours()
+    test_dbg_app()
     test_build_flavours()
     if fails:
         print(f"{fails} check(s) failed")

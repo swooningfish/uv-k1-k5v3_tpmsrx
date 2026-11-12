@@ -8,15 +8,40 @@
 #include "tpmsrx_assets.h"
 #include "dectpms.c"
 
+/**
+ * Copy bytes. The overlay is freestanding and has no libc.
+ *
+ * @param d Destination.
+ * @param s Source.
+ * @param n Number of bytes.
+ * @return The destination.
+ */
 void *memcpy(void *d, const void *s, size_t n)
 {
-    uint8_t *D = d; const uint8_t *S = s;
-    while (n--) *D++ = *S++;
+    uint8_t *D = d;
+    const uint8_t *S = s;
+
+    while (n--) {
+        *D++ = *S++;
+    }
     return d;
 }
+/**
+ * Fill bytes. The overlay is freestanding and has no libc.
+ *
+ * @param d Destination.
+ * @param c Byte value, converted to unsigned char.
+ * @param n Number of bytes.
+ * @return The destination.
+ */
 void *memset(void *d, int c, size_t n)
 {
-    uint8_t *p = d; while (n) p[--n] = (uint8_t)c; return d;
+    uint8_t *p = d;
+
+    while (n) {
+        p[--n] = (uint8_t)c;
+    }
+    return d;
 }
 
 #define FS             38400u
@@ -93,7 +118,7 @@ typedef struct {
 
 static struct {
     const app_api_t *A;
-    uint8_t prevKey, led, nRows, refresh, menu, menuSel, blOff, path;
+    uint8_t prevKey, led, nRows, refresh, menu, menuSel, blOff, path, spk;
     uint16_t ledCnt, keyCnt;
     int16_t rssi;
     uint32_t autoAt, lastHit, lastKey;
@@ -101,15 +126,79 @@ static struct {
     row_t *rows;
 } g;
 
-uint64_t __aeabi_uidivmod(uint32_t n, uint32_t d){ return g.A->uidivmod(n, d); }
+/**
+ * Unsigned divide and remainder for the ARM EABI.
+ *
+ * @param n Dividend.
+ * @param d Divisor.
+ * @return Quotient in the low 32 bits and remainder in the high 32 bits.
+ */
+uint64_t __aeabi_uidivmod(uint32_t n, uint32_t d)
+{
+    return g.A->uidivmod(n, d);
+}
+/**
+ * Unsigned divide for the ARM EABI. Alias of __aeabi_uidivmod.
+ *
+ * @param n Dividend.
+ * @param d Divisor.
+ * @return Quotient in the low 32 bits and remainder in the high 32 bits.
+ */
 uint64_t __aeabi_uidiv(uint32_t n, uint32_t d) __attribute__((alias("__aeabi_uidivmod")));
-uint64_t __aeabi_idivmod(int32_t n, int32_t d){ return g.A->idivmod(n, d); }
+/**
+ * Signed divide and remainder for the ARM EABI.
+ *
+ * @param n Dividend.
+ * @param d Divisor.
+ * @return Quotient in the low 32 bits and remainder in the high 32 bits.
+ */
+uint64_t __aeabi_idivmod(int32_t n, int32_t d)
+{
+    return g.A->idivmod(n, d);
+}
+/**
+ * Signed divide for the ARM EABI. Alias of __aeabi_idivmod.
+ *
+ * @param n Dividend.
+ * @param d Divisor.
+ * @return Quotient in the low 32 bits and remainder in the high 32 bits.
+ */
 uint64_t __aeabi_idiv(int32_t n, int32_t d) __attribute__((alias("__aeabi_idivmod")));
 
-static char *put(char *o, const char *s){ while (*s) *o++ = *s++; return o; }
+/**
+ * Append a C string.
+ *
+ * @param o Cursor to write at.
+ * @param s Text to copy, not including its terminator.
+ * @return Cursor after the copied text.
+ */
+static char *put(char *o, const char *s)
+{
+    while (*s) {
+        *o++ = *s++;
+    }
+    return o;
+}
+/**
+ * Append a signed decimal via the firmware formatter.
+ *
+ * @param o Cursor to write at.
+ * @param v Value to append.
+ * @return Cursor after the digits.
+ */
 __attribute__((noinline))
-static char *puti(char *o, int32_t v){ return g.A->append_i32(o, v); }
+static char *puti(char *o, int32_t v)
+{
+    return g.A->append_i32(o, v);
+}
 
+/**
+ * Append eight uppercase hex digits.
+ *
+ * @param o Cursor to write at.
+ * @param v Value, printed in full 32 bits.
+ * @return Cursor after the digits.
+ */
 static char *putHex8(char *o, uint32_t v)
 {
     for (int i = 7; i >= 0; i--) {
@@ -119,6 +208,13 @@ static char *putHex8(char *o, uint32_t v)
     return o;
 }
 
+/**
+ * Append an age as whole seconds, minutes, or hours.
+ *
+ * @param o Cursor to write at.
+ * @param age_ms Age in milliseconds.
+ * @return Cursor after the unit suffix.
+ */
 static char *putAge(char *o, uint32_t age_ms)
 {
     if (age_ms < 60000u) {
@@ -136,15 +232,35 @@ static char *putAge(char *o, uint32_t age_ms)
     return o;
 }
 
+/**
+ * Append 315.00 or 433.92 from the saved band.
+ *
+ * @param o Cursor to write at.
+ * @return Cursor after the digits.
+ */
 static char *putBand(char *o)
 {
     o = puti(o, g.cfg.band433 ? 433 : 315);
     *o++ = '.';
-    if (g.cfg.band433) { *o++ = '9'; *o++ = '2'; }
-    else { *o++ = '0'; *o++ = '0'; }
+    if (g.cfg.band433) {
+        *o++ = '9';
+        *o++ = '2';
+    } else {
+        *o++ = '0';
+        *o++ = '0';
+    }
     return o;
 }
 
+/**
+ * Status-line demod text for the current preference.
+ *
+ * AUTO shows A:F or A:O for the path in use.
+ * A fixed preference shows FSK or OOK.
+ *
+ * @param ui Packed UI strings for this flavour.
+ * @return Pointer at the label inside ui.
+ */
 static const char *modeLabel(const char *ui)
 {
     if (g.cfg.pref == PREF_AUTO)
@@ -153,18 +269,38 @@ static const char *modeLabel(const char *ui)
     return ui + T_FSK;
 }
 
+/**
+ * Terminate a tiny-font string and draw it.
+ *
+ * @param buf Start of the string.
+ * @param x Left pixel.
+ * @param y Body-pixel row.
+ * @param end Cursor just past the last character.
+ */
 static void tiny(char *buf, uint8_t x, uint8_t y, char *end)
 {
     *end = '\0';
     g.A->print_tiny(buf, x, y, false, true);
 }
 
+/**
+ * Draw a tiny-font string centered in the 128 px width.
+ *
+ * @param buf Start of the string.
+ * @param y Body-pixel row.
+ * @param end Cursor just past the last character.
+ */
 static void tinyCenter(char *buf, uint8_t y, char *end)
 {
     unsigned w = (unsigned)(end - buf) * 4u;
     tiny(buf, (uint8_t)((w >= 128u) ? 0u : ((128u - w) >> 1)), y, end);
 }
 
+/**
+ * Choose the demod the slicer should run for the saved preference.
+ *
+ * @return TPMS_MODE_FSK or TPMS_MODE_OOK.
+ */
 static uint8_t activePath(void)
 {
     if (g.cfg.pref == PREF_OOK) return TPMS_MODE_OOK;
@@ -172,9 +308,11 @@ static uint8_t activePath(void)
     return TPMS_MODE_FSK;
 }
 
-/* REG_33 is the whole GPIO word (RX enable, PA, both LNAs, both LEDs).
- * Change the LNA only when a write reads back, so a write-only register
- * is left on the VFO's antenna path. */
+/**
+ * Select the UHF LNA when REG_33 can be read back.
+ *
+ * REG_33 is the GPIO word. A write-only register stays on the VFO path.
+ */
 static void selectUhfLna(void)
 {
     uint16_t cur = g.A->bk_read(REG_33);
@@ -186,10 +324,12 @@ static void selectUhfLna(void)
     if (g.A->bk_read(REG_33) != n) g.A->bk_write(REG_33, cur);
 }
 
-/* Park on 315.000 or 433.920 only (×10 Hz). No frequency sweep.
- * tones_off_rx pulses REG_30 (PLL) and forces AF mute — every IF/AF write
- * must run after it, and the active path must fully own REG_47 so FSK↔OOK
- * never leaves mute or the other mode's AF route. */
+/**
+ * Park on 315.000 or 433.920 MHz and point AF at the active demod.
+ *
+ * tones_off_rx pulses the PLL and mutes audio, so IF and AF writes follow.
+ * FSK owns REG_47 as raw bypass. OOK owns it as AM.
+ */
 static void applyRf(void)
 {
     uint32_t f = g.cfg.band433 ? FREQ_433 : FREQ_315;
@@ -208,9 +348,17 @@ static void applyRf(void)
     else
         g.A->set_af(APP_AF_AM);
     selectUhfLna();
-    g.A->audio_path(false);
+    g.A->audio_path(g.spk != 0u);
 }
 
+/**
+ * Switch demod, retune, and clear the slicer.
+ *
+ * Does nothing when the radio is already on that path.
+ *
+ * @param path TPMS_MODE_FSK or TPMS_MODE_OOK.
+ * @param dec Slicer to reset after the retune.
+ */
 static void setPath(uint8_t path, dectpms_t *dec)
 {
     if (g.path == path) return;
@@ -220,6 +368,13 @@ static void setPath(uint8_t path, dectpms_t *dec)
     g.autoAt = g.A->ticks_ms();
 }
 
+/**
+ * UI label for a decoded sensor model.
+ *
+ * @param m TPMS_FORD or one of the other model ids.
+ * @param ui Packed UI strings for this flavour.
+ * @return Pointer at the label inside ui, or ui if the model is absent.
+ */
 static const char *modelName(uint8_t m, const char *ui)
 {
 #if TPMS_HAVE_FSK
@@ -242,6 +397,14 @@ static const char *modelName(uint8_t m, const char *ui)
     return ui;
 }
 
+/**
+ * Update the live row for this sensor, or insert one.
+ *
+ * A full list replaces the oldest row.
+ *
+ * @param p Packet just decoded.
+ * @param rssi Signal strength in dBm.
+ */
 static void upsert(const tpms_pkt_t *p, int16_t rssi)
 {
     uint32_t now = g.A->ticks_ms();
@@ -271,8 +434,14 @@ static void upsert(const tpms_pkt_t *p, int16_t rssi)
     r->t = now;
 }
 
-/* Bulb in the gap between the title capsule and the band. Setting off hides it,
- * including after `0`, so a daylight read still shows whether the lamp is armed. */
+/**
+ * Draw the status bulb when the light setting is on and the gap fits.
+ *
+ * The bulb sits between the title capsule and the band.
+ * Display off hides it, including after the 0 key.
+ *
+ * @param bandX Left edge of the band text, in pixels.
+ */
 static void drawLight(uint8_t bandX)
 {
     uint8_t *line;
@@ -285,6 +454,11 @@ static void drawLight(uint8_t bandX)
     memcpy(line + (TITLE_CAP_END + 1u) + (gap >> 1), LIGHT_ICON, sizeof LIGHT_ICON);
 }
 
+/**
+ * Draw the status line: title, bulb, band, demod, and speaker mark.
+ *
+ * @param ui Packed UI strings for this flavour.
+ */
 static void drawStatus(const char *ui)
 {
     char str[20];
@@ -297,6 +471,10 @@ static void drawStatus(const char *ui)
     o = putBand(str);
     *o++ = ' ';
     o = put(o, modeLabel(ui));
+    if (g.spk) {
+        *o++ = ' ';
+        *o++ = 'S';
+    }
     *o = '\0';
     width = (unsigned)(o - str) * 4u;
     /* 22 px clears the title capsule. 48 px covers the battery icon plus text. */
@@ -308,6 +486,11 @@ static void drawStatus(const char *ui)
         g.A->print_tiny(str, 2, 1, false, true);
 }
 
+/**
+ * Draw the options menu and its help line.
+ *
+ * @param ui Packed UI strings for this flavour.
+ */
 static void drawMenu(const char *ui)
 {
     char str[28];
@@ -355,7 +538,11 @@ static void drawMenu(const char *ui)
     }
 }
 
-/* Listening key strip: right-aligned on the MENU capsule baseline (body line 6). */
+/**
+ * Draw the listening key strip on body line 6, right aligned.
+ *
+ * @param ui Packed UI strings for this flavour.
+ */
 static void drawListHints(const char *ui)
 {
     char str[28];
@@ -367,6 +554,11 @@ static void drawListHints(const char *ui)
     tiny(str, x, 49, o);
 }
 
+/**
+ * Draw the menu, the listening screen, or the live sensor list.
+ *
+ * @param ui Packed UI strings for this flavour.
+ */
 __attribute__((noinline))
 static void draw(const char *ui)
 {
@@ -432,18 +624,30 @@ static void draw(const char *ui)
 }
 
 #if !TPMS_LOCK_MODE
+/**
+ * Cycle FSK, OOK, and AUTO, then retune.
+ *
+ * @param dec Slicer to reset on the new path.
+ */
 static void cyclePref(dectpms_t *dec)
 {
     if (g.cfg.pref == PREF_FSK) g.cfg.pref = PREF_OOK;
     else if (g.cfg.pref == PREF_OOK) g.cfg.pref = PREF_AUTO;
     else g.cfg.pref = PREF_FSK;
-    if (g.cfg.pref != PREF_AUTO) g.path = (g.cfg.pref == PREF_OOK) ? TPMS_MODE_OOK : TPMS_MODE_FSK;
+    if (g.cfg.pref != PREF_AUTO) {
+        g.path = (g.cfg.pref == PREF_OOK) ? TPMS_MODE_OOK : TPMS_MODE_FSK;
+    }
     applyRf();
     dectpms_init(dec, activePath());
     g.autoAt = g.A->ticks_ms();
 }
 #endif
 
+/**
+ * Apply the selected menu item.
+ *
+ * @param dec Slicer to reset when the band or demod changes.
+ */
 static void menuChange(dectpms_t *dec)
 {
     switch (g.menuSel) {
@@ -470,6 +674,13 @@ static void menuChange(dectpms_t *dec)
 #endif
 }
 
+/**
+ * Handle one new keypress.
+ *
+ * @param key Key code from the firmware.
+ * @param dec Slicer, reset when the band or demod changes.
+ * @return True when the app should exit.
+ */
 static bool handleKey(uint8_t key, dectpms_t *dec)
 {
     g.lastKey = g.A->ticks_ms();
@@ -502,6 +713,10 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
     switch (key) {
         case APP_KEY_EXIT:
             return true;
+        case APP_KEY_1:
+            g.spk ^= 1u;
+            g.A->audio_path(g.spk != 0u);
+            break;
         case APP_KEY_MENU:
             g.menu = 1;
             g.menuSel = 0;
@@ -528,6 +743,14 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
     return false;
 }
 
+/**
+ * Report whether the resident backlight should stay lit.
+ *
+ * The menu keeps the lamp on. After the last key it stays on for the
+ * idle window. Display off leaves it off.
+ *
+ * @return True when the lamp should be held on.
+ */
 static bool backlightHeld(void)
 {
     /* Menu stays lit. 10s holds the light after the last key. OFF releases it. */
@@ -535,6 +758,11 @@ static bool backlightHeld(void)
     return g.cfg.disp == DISP_TMO && !g.blOff;
 }
 
+/**
+ * Turn the backlight off after the idle timeout.
+ *
+ * @return True when the lamp was just released.
+ */
 static bool serviceDisp(void)
 {
     if (g.cfg.disp != DISP_TMO || g.menu || g.blOff) return false;
@@ -543,6 +771,11 @@ static bool serviceDisp(void)
     return true;
 }
 
+/**
+ * In AUTO, swap demod after the dwell unless a fresh decode is held.
+ *
+ * @param dec Slicer to reset when the path changes.
+ */
 static void serviceAuto(dectpms_t *dec)
 {
     uint32_t now;
@@ -553,6 +786,11 @@ static void serviceAuto(dectpms_t *dec)
     setPath((uint8_t)(g.path == TPMS_MODE_FSK ? TPMS_MODE_OOK : TPMS_MODE_FSK), dec);
 }
 
+/**
+ * Sample audio until EXIT, decoding packets and refreshing the screen.
+ *
+ * @param ui Packed UI strings for this flavour.
+ */
 __attribute__((noinline))
 static void listen(const char *ui)
 {
@@ -620,6 +858,11 @@ static void listen(const char *ui)
     }
 }
 
+/**
+ * Overlay entry. Listen, then restore the radio and save the settings.
+ *
+ * @param api Firmware service table.
+ */
 __attribute__((section(".text.entry"), used))
 void app_main(const app_api_t *api)
 {
@@ -635,6 +878,7 @@ void app_main(const app_api_t *api)
     g.nRows = 0;
     g.menu = 0;
     g.blOff = 0;
+    g.spk = 0;
     g.cfg.disp = DISP_TMO;
     api->led(false);
     api->asset_read(0, ui, UI_SIZE);

@@ -55,6 +55,13 @@ DOT_H = PIXEL_SIZE - PIXEL_LCD
 
 
 def _blend(bg, fg, ratio):
+    """Blend two colours.
+
+    @param bg Starting colour.
+    @param fg Ink colour.
+    @param ratio Zero keeps bg and one reaches fg.
+    @return The blended colour.
+    """
     return tuple(int(round(b + (f - b) * ratio)) for b, f in zip(bg, fg))
 
 
@@ -102,15 +109,34 @@ VARIANTS = {
 
 
 def new_fb():
+    """Allocate a blank 128 by 64 framebuffer.
+
+    @return A row-major buffer of zeros.
+    """
     return [0] * (W * H)
 
 
 def px(fb, x, y, ink):
+    """Set one LCD pixel.
+
+    @param fb Framebuffer, row-major.
+    @param x Column.
+    @param y Row.
+    @param ink Nonzero paints the pixel.
+    """
     if 0 <= x < W and 0 <= y < H:
         fb[y * W + x] = 1 if ink else 0
 
 
 def glyph(fb, x, y, ch, ink):
+    """Draw one 3x5 glyph.
+
+    @param fb Framebuffer, row-major.
+    @param x Left column.
+    @param y Top row.
+    @param ch Character to draw.
+    @param ink Nonzero paints the lit pixels.
+    """
     i = ord(ch) - 32
     if i < 0 or i >= len(FONT):
         return
@@ -123,6 +149,15 @@ def glyph(fb, x, y, ch, ink):
 
 
 def text(fb, x, y, s, ink=1):
+    """Draw a 3x5 string, advancing 4 px per character.
+
+    @param fb Framebuffer, row-major.
+    @param x Left column.
+    @param y Top row.
+    @param s Text to draw.
+    @param ink Nonzero paints the lit pixels.
+    @return The column after the last character.
+    """
     for ch in s:
         glyph(fb, x, y, ch, ink)
         x += 4
@@ -130,12 +165,30 @@ def text(fb, x, y, s, ink=1):
 
 
 def fill(fb, x0, y0, x1, y1, ink):
+    """Fill a rectangle.
+
+    @param fb Framebuffer, row-major.
+    @param x0 Left column, inclusive.
+    @param y0 Top row, inclusive.
+    @param x1 Right column, exclusive.
+    @param y1 Bottom row, exclusive.
+    @param ink Value stored in each pixel.
+    """
     for y in range(y0, y1):
         for x in range(x0, x1):
             px(fb, x, y, ink)
 
 
 def inverse(fb, s, x, line, end_x, status_bar):
+    """Draw an inverse capsule and its label.
+
+    @param fb Framebuffer, row-major.
+    @param s Label text.
+    @param x Left column.
+    @param line Text row, on the status bar or in the body.
+    @param end_x Right column, exclusive.
+    @param status_bar True when line is on the status row.
+    """
     y0 = line * 8 if status_bar else 8 + line * 8
     fill(fb, x, y0, end_x, y0 + 8, 1)
     text(fb, x, y0 + 1, s, 0)
@@ -171,7 +224,14 @@ _FONT_SMALL = {
 
 
 def text_small(fb, x, s):
-    """UI_PrintStringSmallBufferNormal: 7 px/char, glyph columns at x+1..x+6."""
+    """Draw a status-font string, 7 px per character.
+
+    Glyph columns sit at x+1 through x+6, matching the radio small font.
+
+    @param fb Framebuffer, row-major.
+    @param x Left pixel of the first character.
+    @param s Text. Unsupported characters are skipped.
+    """
     for i, ch in enumerate(s):
         cols = _FONT_SMALL.get(ch)
         if cols is None:
@@ -184,6 +244,11 @@ def text_small(fb, x, s):
 
 
 def battery(fb, pct="78%"):
+    """Draw the status battery icon and its percent.
+
+    @param fb Framebuffer, row-major.
+    @param pct Percent text, including the percent sign.
+    """
     # Icon flush right (x=112..127), matching ST7565_DrawLine(LCD_WIDTH - 16, …).
     for y, bits in enumerate(_BATTERY):
         for i in range(16):
@@ -206,7 +271,12 @@ _LIGHT = (
     0b00001100,
 )
 def light_icon(fb, band_x, cap_end):
-    """Same gap as drawLight(): centered between the capsule and the band."""
+    """Center the bulb in the same gap drawLight() uses.
+
+    @param fb Framebuffer, row-major.
+    @param band_x Left edge of the band text.
+    @param cap_end Right edge of the title capsule.
+    """
     if band_x < cap_end + 2 + len(_LIGHT):
         return
     gap = band_x - (cap_end + 1) - len(_LIGHT)
@@ -218,6 +288,13 @@ def light_icon(fb, band_x, cap_end):
 
 
 def status(fb, title, band, light=True):
+    """Draw the title capsule, band, bulb, and battery.
+
+    @param fb Framebuffer, row-major.
+    @param title Title text inside the capsule.
+    @param band Band and demod text.
+    @param light True when the bulb is shown.
+    """
     cap_end = 2 + len(title) * 4
     inverse(fb, title, 2, 0, cap_end, True)
     width = len(band) * 4
@@ -229,6 +306,12 @@ def status(fb, title, band, light=True):
 
 
 def center(fb, y, s):
+    """Draw a 3x5 string centered on the 128 px width.
+
+    @param fb Framebuffer, row-major.
+    @param y Top row.
+    @param s Text to draw.
+    """
     text(fb, max(0, (W - len(s) * 4) // 2), y, s)
 
 
@@ -237,6 +320,9 @@ def hint_strip(fb, s):
 
     print_tiny y is a body pixel (status is a separate 8 px row). Line 6
     glyphs start at body y=49, which is LCD y=57 in this combined buffer.
+
+    @param fb Framebuffer, row-major.
+    @param s Hint text.
     """
     w = len(s) * 4
     x = 2 if w >= 126 else 126 - w
@@ -244,6 +330,11 @@ def hint_strip(fb, s):
 
 
 def scene_waiting(v):
+    """Draw the listening screen for one flavour.
+
+    @param v Flavour layout from VARIANTS.
+    @return The framebuffer.
+    """
     fb = new_fb()
     status(fb, "TPMS", v["status"])
     # Body y, same calls as tinyCenter in draw(): 8, 16, 24.
@@ -258,6 +349,11 @@ def scene_waiting(v):
 
 
 def scene_menu(v):
+    """Draw the options menu for one flavour.
+
+    @param v Flavour layout from VARIANTS.
+    @return The framebuffer.
+    """
     fb = new_fb()
     status(fb, "MENU", v["menu_status"])
     for i, (s, end) in enumerate(v["menu"]):
@@ -292,6 +388,9 @@ def write_png(path, fb):
     The canvas is the gap colour. Each cell then gets a DOT_W×DOT_H rectangle
     in its top-left: ink if that LCD pixel is on, the 5% off-dot if it is off.
     Indexed 3-colour PNG so a viewer cannot anti-alias the grid.
+
+    @param path Destination PNG.
+    @param fb Row-major 128 by 64 framebuffer.
     """
     sw, sh = W * CELL_W, H * CELL_H
     # 0 = gap, 1 = off-dot, 2 = ink.
@@ -307,6 +406,12 @@ def write_png(path, fb):
                 raw.append(0)
 
     def chunk(tag, data):
+        """Pack one PNG chunk with its length and CRC.
+
+        @param tag Four-byte chunk type.
+        @param data Chunk payload.
+        @return Length, type, payload, and CRC.
+        """
         return struct.pack(">I", len(data)) + tag + data + struct.pack(
             ">I", zlib.crc32(tag + data) & 0xFFFFFFFF
         )
@@ -323,6 +428,7 @@ def write_png(path, fb):
 
 
 def main():
+    """Write the listening, menu, and list pictures into docs/."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     docs = os.path.join(root, "docs")
     variants = os.path.join(docs, "variants")

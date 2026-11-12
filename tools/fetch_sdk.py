@@ -29,10 +29,16 @@ SDK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sdk")
 
 
 def blob_sha1(data):
+    """Hash bytes the way git hashes a blob.
+
+    @param data File contents.
+    @return Hex SHA-1 of the git blob header plus the bytes.
+    """
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
 def main():
+    """Download missing or mismatched SDK files into sdk/."""
     os.makedirs(SDK, exist_ok=True)
     for name, sha1 in FILES.items():
         path = os.path.join(SDK, name)

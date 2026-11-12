@@ -11,11 +11,25 @@
 
 enum { ST_HUNT = 0, ST_FORD = 1, ST_TOYT = 2, ST_DONE = 4 };
 
+/**
+ * Read one MSB-first bit from a packed buffer.
+ *
+ * @param bits Packed bytes, high bit on the left.
+ * @param i Bit index from the start of bits.
+ * @return Zero or one.
+ */
 static uint8_t bit_at(const uint8_t *bits, unsigned i)
 {
     return (uint8_t)((bits[i >> 3] >> (7u - (i & 7u))) & 1u);
 }
 
+/**
+ * Write one MSB-first bit in a packed buffer.
+ *
+ * @param bits Packed bytes, high bit on the left.
+ * @param i Bit index from the start of bits.
+ * @param v Nonzero stores a one.
+ */
 static void bit_set(uint8_t *bits, unsigned i, uint8_t v)
 {
     if (v) bits[i >> 3] = (uint8_t)(bits[i >> 3] | (uint8_t)(0x80u >> (i & 7u)));
@@ -23,6 +37,15 @@ static void bit_set(uint8_t *bits, unsigned i, uint8_t v)
 }
 
 #if TPMS_HAVE_FSK || TPMS_HAVE_SCHR
+/**
+ * CRC-8 over a buffer, MSB first and not reflected.
+ *
+ * @param d Input bytes.
+ * @param n Number of bytes.
+ * @param poly Generator polynomial.
+ * @param init Initial register value.
+ * @return CRC of the buffer.
+ */
 static uint8_t crc8(const uint8_t *d, unsigned n, uint8_t poly, uint8_t init)
 {
     uint8_t c = init;
@@ -36,6 +59,12 @@ static uint8_t crc8(const uint8_t *d, unsigned n, uint8_t poly, uint8_t init)
 #endif
 
 #if TPMS_HAVE_FSK
+/**
+ * Read a big-endian 32-bit value.
+ *
+ * @param b At least four bytes.
+ * @return The first four bytes as an integer.
+ */
 static uint32_t be32(const uint8_t *b)
 {
     return ((uint32_t)b[0] << 24) | ((uint32_t)b[1] << 16) |
@@ -43,12 +72,28 @@ static uint32_t be32(const uint8_t *b)
 }
 #endif
 
+/**
+ * Convert pressure in tenths of a kilopascal to whole PSI.
+ *
+ * @param kpa10 Pressure times ten, in kPa.
+ * @return Nearest whole PSI.
+ */
 static int16_t psi_from_kpa10(unsigned kpa10)
 {
     return (int16_t)((kpa10 * 145u + 5000u) / 10000u);
 }
 
 #if TPMS_HAVE_FSK
+/**
+ * Decode one Ford frame after Manchester decoding.
+ *
+ * Bytes 0..6 are summed and must equal byte 7. Pressure is whole PSI.
+ * Temperature is omitted when its high bit is set.
+ *
+ * @param b Eight payload bytes, checksum last.
+ * @param out Filled with id, PSI, Celsius, and TPMS_FORD.
+ * @return True when the checksum and status flags are valid.
+ */
 bool tpms_parse_ford(const uint8_t b[8], tpms_pkt_t *out)
 {
     uint8_t sum = (uint8_t)(b[0] + b[1] + b[2] + b[3] + b[4] + b[5] + b[6]);
@@ -68,6 +113,16 @@ bool tpms_parse_ford(const uint8_t b[8], tpms_pkt_t *out)
     return true;
 }
 
+/**
+ * Decode one Toyota frame after differential Manchester decoding.
+ *
+ * CRC-8 covers the first eight bytes, poly 0x07 and init 0x80.
+ * The repeated pressure field must match.
+ *
+ * @param b Nine payload bytes, CRC last.
+ * @param out Filled with id, PSI, Celsius, and TPMS_TOYT.
+ * @return True when the CRC and the pressure check match.
+ */
 bool tpms_parse_toyota(const uint8_t b[9], tpms_pkt_t *out)
 {
     if (crc8(b, 8, 0x07u, 0x80u) != b[8]) return false;
@@ -84,6 +139,16 @@ bool tpms_parse_toyota(const uint8_t b[9], tpms_pkt_t *out)
 #endif /* TPMS_HAVE_FSK */
 
 #if TPMS_HAVE_SCHR
+/**
+ * Decode one Schrader MRXGG4 frame after the sync nibble is removed.
+ *
+ * CRC-8 covers the first seven bytes, poly 0x07 and init 0xF0.
+ * Pressure is stored as 2.5 kPa steps and returned as whole PSI.
+ *
+ * @param b Eight payload bytes, CRC last.
+ * @param out Filled with id, PSI, Celsius, and TPMS_SCHR.
+ * @return True when the CRC matches.
+ */
 bool tpms_parse_schrader(const uint8_t b[8], tpms_pkt_t *out)
 {
     if (crc8(b, 7, 0x07u, 0xf0u) != b[7]) return false;
@@ -97,6 +162,16 @@ bool tpms_parse_schrader(const uint8_t b[8], tpms_pkt_t *out)
 #endif /* TPMS_HAVE_SCHR */
 
 #if TPMS_HAVE_EG53
+/**
+ * Decode one Schrader EG53 frame.
+ *
+ * The sum of the first nine bytes must equal the last byte.
+ * An all-zero body is rejected. Fahrenheit is converted to Celsius.
+ *
+ * @param b Ten payload bytes, checksum last.
+ * @param out Filled with id, PSI, Celsius, and TPMS_EG53.
+ * @return True when the checksum matches and the body is not empty.
+ */
 bool tpms_parse_eg53(const uint8_t b[10], tpms_pkt_t *out)
 {
     unsigned sum = 0;
@@ -114,6 +189,16 @@ bool tpms_parse_eg53(const uint8_t b[10], tpms_pkt_t *out)
 #endif
 
 #if TPMS_HAVE_BMW
+/**
+ * Decode one BMW or Mini Schrader frame.
+ *
+ * The 24-bit id must not be 0 or all ones. Pressure above 450 kPa,
+ * or a temperature outside -40 C to 85 C, is rejected.
+ *
+ * @param b Six bytes holding the 46-bit body.
+ * @param out Filled with id, PSI, Celsius, and TPMS_BMW.
+ * @return True when the check bits and the range limits pass.
+ */
 bool tpms_parse_bmw(const uint8_t b[6], tpms_pkt_t *out)
 {
     uint32_t serial = ((uint32_t)(b[0] & 0x1fu) << 19) | ((uint32_t)b[1] << 11) |
@@ -142,6 +227,15 @@ bool tpms_parse_bmw(const uint8_t b[6], tpms_pkt_t *out)
 #endif
 
 #if TPMS_HAVE_NIS
+/**
+ * Decode one Nissan or Subaru frame on the Nissan pressure scale.
+ *
+ * PSI is the raw field divided by four. There is no temperature.
+ *
+ * @param b Five payload bytes.
+ * @param out Filled with id, PSI, TPMS_NO_TEMP, and TPMS_NISS.
+ * @return True when the nibble checksum matches and the body is not empty.
+ */
 bool tpms_parse_nis(const uint8_t b[5], tpms_pkt_t *out)
 {
     int sum = 0;
@@ -160,8 +254,19 @@ bool tpms_parse_nis(const uint8_t b[5], tpms_pkt_t *out)
 }
 #endif
 
-/* rtl_433 bitbuffer_manchester_decode: pairs, emit bit2 when a != b. */
 #if TPMS_HAVE_FSK || TPMS_HAVE_NIS
+/**
+ * Manchester-decode pairs, emitting the second bit when they differ.
+ *
+ * This matches rtl_433. A pair of equal bits ends the row.
+ *
+ * @param raw Packed source bits, MSB first.
+ * @param start Index of the first source bit.
+ * @param nraw Number of source bits.
+ * @param out Packed decoded bits.
+ * @param max_bits Capacity of out, in bits.
+ * @return Number of decoded bits written.
+ */
 static unsigned man_decode(const uint8_t *raw, unsigned start, unsigned nraw,
                            uint8_t *out, unsigned max_bits)
 {
@@ -177,7 +282,17 @@ static unsigned man_decode(const uint8_t *raw, unsigned start, unsigned nraw,
 #endif
 
 #if TPMS_HAVE_FSK
-/* rtl_433 bitbuffer_differential_manchester_decode (simplified after sync). */
+/**
+ * Differential-Manchester decode a row that already passed its sync.
+ *
+ * This is the rtl_433 decoder, simplified for one aligned row.
+ *
+ * @param raw Packed source bits, MSB first.
+ * @param nraw Number of source bits.
+ * @param out Packed decoded bits.
+ * @param max_bits Capacity of out, in bits.
+ * @return Number of decoded bits written.
+ */
 static unsigned dman_decode(const uint8_t *raw, unsigned nraw, uint8_t *out, unsigned max_bits)
 {
     unsigned n = 0, ipos = 0;
@@ -213,18 +328,35 @@ static unsigned dman_decode(const uint8_t *raw, unsigned nraw, uint8_t *out, uns
 }
 #endif
 
+/**
+ * Drop every collected payload bit.
+ *
+ * @param d Slicer state.
+ */
 static void raw_clear(dectpms_t *d)
 {
     d->bitn = 0;
     for (unsigned i = 0; i < sizeof d->raw; i++) d->raw[i] = 0;
 }
 
+/**
+ * Append one payload bit when the raw buffer still has room.
+ *
+ * @param d Slicer state.
+ * @param bit Zero or one.
+ */
 static void put_bit(dectpms_t *d, uint8_t bit)
 {
     if (d->bitn >= (uint8_t)(sizeof d->raw * 8u)) return;
     bit_set(d->raw, d->bitn++, bit);
 }
 
+/**
+ * Clear the slicer and select FSK or OOK.
+ *
+ * @param d Slicer state.
+ * @param mode TPMS_MODE_FSK or TPMS_MODE_OOK.
+ */
 void dectpms_init(dectpms_t *d, uint8_t mode)
 {
     d->mean = (int32_t)BIAS << 4;
@@ -240,6 +372,11 @@ void dectpms_init(dectpms_t *d, uint8_t mode)
     raw_clear(d);
 }
 
+/**
+ * Drop a partial packet and hunt for the next preamble.
+ *
+ * @param d Slicer state.
+ */
 void dectpms_rearm(dectpms_t *d)
 {
     d->state = ST_HUNT;
@@ -250,6 +387,15 @@ void dectpms_rearm(dectpms_t *d)
 }
 
 #if TPMS_HAVE_EG53 || TPMS_HAVE_BMW
+/**
+ * Copy a bit range into a fresh MSB-first buffer.
+ *
+ * @param raw Packed source bits.
+ * @param nraw Number of source bits.
+ * @param base First source bit to copy.
+ * @param out Destination. Cleared before the copy.
+ * @param nbits Number of bits to copy.
+ */
 static void pack_bits(const uint8_t *raw, unsigned nraw, unsigned base,
                       uint8_t *out, unsigned nbits)
 {
@@ -261,6 +407,13 @@ static void pack_bits(const uint8_t *raw, unsigned nraw, unsigned base,
 #endif
 
 #if TPMS_HAVE_FSK
+/**
+ * Manchester-decode the Ford bit buffer and parse the 8-byte frame.
+ *
+ * @param d Slicer holding the raw Ford bits.
+ * @param out Filled on success.
+ * @return True when a full frame decodes and checks out.
+ */
 static bool finish_ford(dectpms_t *d, tpms_pkt_t *out)
 {
     uint8_t pkt[8];
@@ -269,6 +422,13 @@ static bool finish_ford(dectpms_t *d, tpms_pkt_t *out)
     return tpms_parse_ford(pkt, out);
 }
 
+/**
+ * Differential-Manchester decode the Toyota buffer and parse it.
+ *
+ * @param d Slicer holding the raw Toyota bits.
+ * @param out Filled on success.
+ * @return True when a full frame decodes and checks out.
+ */
 static bool finish_toyota(dectpms_t *d, tpms_pkt_t *out)
 {
     uint8_t pkt[9];
@@ -279,6 +439,13 @@ static bool finish_toyota(dectpms_t *d, tpms_pkt_t *out)
 #endif
 
 #if TPMS_HAVE_SCHR
+/**
+ * Take the last 68 OOK bits, drop the sync nibble, and parse Schrader.
+ *
+ * @param d Slicer holding the OOK burst.
+ * @param out Filled on success.
+ * @return True when 68 bits are present and the frame checks out.
+ */
 static bool finish_schrader(dectpms_t *d, tpms_pkt_t *out)
 {
     uint8_t b[8];
@@ -294,6 +461,13 @@ static bool finish_schrader(dectpms_t *d, tpms_pkt_t *out)
 #endif
 
 #if TPMS_HAVE_EG53
+/**
+ * Drop the 40-bit EG53 preamble and parse the 80-bit body.
+ *
+ * @param d Slicer holding the OOK burst.
+ * @param out Filled on success.
+ * @return True when 120 bits are present and the frame checks out.
+ */
 static bool finish_eg53(dectpms_t *d, tpms_pkt_t *out)
 {
     uint8_t b[10];
@@ -305,6 +479,13 @@ static bool finish_eg53(dectpms_t *d, tpms_pkt_t *out)
 #endif
 
 #if TPMS_HAVE_BMW
+/**
+ * Check the BMW 16-bit sync and parse the following 46 bits.
+ *
+ * @param d Slicer holding the OOK burst.
+ * @param out Filled on success.
+ * @return True when the sync and the frame both check out.
+ */
 static bool finish_bmw(dectpms_t *d, tpms_pkt_t *out)
 {
     uint8_t b[6];
@@ -319,6 +500,14 @@ static bool finish_bmw(dectpms_t *d, tpms_pkt_t *out)
 #endif
 
 #if TPMS_HAVE_NIS
+/**
+ * Find the first 16-bit pattern in a packed bit row.
+ *
+ * @param raw Packed bits, MSB first.
+ * @param nbits Number of bits to search.
+ * @param pat Pattern to match once 16 bits are in the window.
+ * @return Bit index of the match, or -1.
+ */
 static int find16(const uint8_t *raw, unsigned nbits, uint16_t pat)
 {
     uint16_t w = 0;
@@ -330,6 +519,13 @@ static int find16(const uint8_t *raw, unsigned nbits, uint16_t pat)
     return -1;
 }
 
+/**
+ * Find the Nissan sync, Manchester-decode, invert, and parse.
+ *
+ * @param d Slicer holding the OOK burst.
+ * @param out Filled on success.
+ * @return True when the sync, the length, and the frame all check out.
+ */
 static bool finish_nis(dectpms_t *d, tpms_pkt_t *out)
 {
     int at = find16(d->raw, d->bitn, 0x555Eu);
@@ -346,6 +542,13 @@ static bool finish_nis(dectpms_t *d, tpms_pkt_t *out)
 }
 #endif
 
+/**
+ * Try each OOK parser this flavour includes, longest frame first.
+ *
+ * @param d Slicer holding the OOK burst.
+ * @param out Filled on success.
+ * @return True when one parser accepts the burst.
+ */
 static bool finish_ook(dectpms_t *d, tpms_pkt_t *out)
 {
     unsigned n = d->bitn;
@@ -365,6 +568,14 @@ static bool finish_ook(dectpms_t *d, tpms_pkt_t *out)
     return false;
 }
 
+/**
+ * Advance the preamble hunt or the payload from one demodulated bit.
+ *
+ * @param d Slicer state.
+ * @param bit Zero or one, already sliced.
+ * @param out Filled when a frame completes.
+ * @param hit Set true when out holds a packet.
+ */
 static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
 {
     d->win = (d->win << 1) | (bit & 1u);
@@ -416,6 +627,17 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
 #endif
 }
 
+/**
+ * Feed one AF sample and report a finished frame.
+ *
+ * Samples are 12-bit PCM centered on 2048, taken at 38400 Hz.
+ * FSK frames complete on length. OOK frames complete when the carrier drops.
+ *
+ * @param d Slicer state.
+ * @param sample One AF sample.
+ * @param out Filled when a packet checks out.
+ * @return True when out holds a new packet.
+ */
 bool dectpms_push(dectpms_t *d, uint16_t sample, tpms_pkt_t *out)
 {
     if (d->state == ST_DONE) return false;

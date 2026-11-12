@@ -39,6 +39,8 @@ SETS=(
   "eu2|TPMS EU2|TPMS_FLAVOUR_EU2"
   "na2|TPMS NA2|TPMS_FLAVOUR_NA2"
 )
+# dbg is the burst recorder. A flavour name builds that app only.
+WANT_DBG=0
 if [ "${1:-}" != "" ]; then
   want="$1"
   SETS=()
@@ -47,13 +49,17 @@ if [ "${1:-}" != "" ]; then
     na)  SETS=("na|TPMS NA|TPMS_FLAVOUR_NA") ;;
     eu2) SETS=("eu2|TPMS EU2|TPMS_FLAVOUR_EU2") ;;
     na2) SETS=("na2|TPMS NA2|TPMS_FLAVOUR_NA2") ;;
+    dbg) WANT_DBG=1 ;;
     *) echo "unknown flavour: $want"; exit 1 ;;
   esac
+else
+  WANT_DBG=1
 fi
 
 CUR=""
 trap 'printf "\n  ❌ %s build failed\n" "$CUR"' ERR
 
+if [ "${#SETS[@]}" -gt 0 ]; then
 for spec in "${SETS[@]}"; do
   IFS='|' read -r set name def <<< "$spec"
   CUR="$name"
@@ -79,4 +85,26 @@ for spec in "${SETS[@]}"; do
   printf '  ✅ %-12s %4d B  (%d%% of 4 KiB)  ->  %s/%s.app\n' \
          "$name" "$BYTES" "$(( BYTES * 100 / 4096 ))" "$OUT_DIR" "$out"
 done
+fi
+
+if [ "$WANT_DBG" = 1 ]; then
+  CUR="TPMS DBG"
+  printf '  🔨 %-12s\n' "$CUR"
+  "$CC" $CFLAGS \
+      -nostdlib -nostartfiles -T app.ld -Wl,--defsym,APP_VMA=${APP_VMA} \
+      -Wl,--gc-sections -Wl,-Map="${OUT_DIR}/tpms_dbg.map" \
+      -Wl,--build-id=none -Wl,--no-warn-rwx-segments \
+      tpmsdbg_app.c -lgcc -o "${OUT_DIR}/tpms_dbg.elf"
+  "$OBJCOPY" -O binary "${OUT_DIR}/tpms_dbg.elf" "${OUT_DIR}/tpms_dbg.bin"
+  "$PYTHON" "$SDK/pack_app.py" "${OUT_DIR}/tpms_dbg.bin" "${OUT_DIR}/TPMSDBG.app" \
+      --name "TPMS DBG" --ver "$APP_VER" --api-min "$APP_API_MIN" \
+      --vma "${APP_VMA}" --shortcut none >/dev/null
+  BYTES=$(wc -c < "${OUT_DIR}/tpms_dbg.bin")
+  if [ "$BYTES" -gt 4096 ]; then
+      printf '  🚨 %-12s OVERFLOWS 4 KiB (%d B)\n' "$CUR" "$BYTES"
+      exit 1
+  fi
+  printf '  ✅ %-12s %4d B  (%d%% of 4 KiB)  ->  %s/TPMSDBG.app\n' \
+         "$CUR" "$BYTES" "$(( BYTES * 100 / 4096 ))" "$OUT_DIR"
+fi
 trap - ERR

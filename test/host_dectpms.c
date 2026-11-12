@@ -8,6 +8,12 @@
 
 static int fails;
 
+/**
+ * Record a failed check.
+ *
+ * @param cond Nonzero when the check passed.
+ * @param msg Text printed when the check failed.
+ */
 static void expect(int cond, const char *msg)
 {
     if (!cond) {
@@ -16,6 +22,15 @@ static void expect(int cond, const char *msg)
     }
 }
 
+/**
+ * CRC-8 used to build fixture bytes. MSB first, not reflected.
+ *
+ * @param d Input bytes.
+ * @param n Number of bytes.
+ * @param poly Generator polynomial.
+ * @param init Initial register value.
+ * @return CRC of the buffer.
+ */
 static uint8_t crc8_ref(const uint8_t *d, unsigned n, uint8_t poly, uint8_t init)
 {
     uint8_t c = init;
@@ -27,6 +42,9 @@ static uint8_t crc8_ref(const uint8_t *d, unsigned n, uint8_t poly, uint8_t init
     return c;
 }
 
+/**
+ * Check a valid Ford frame and a broken checksum.
+ */
 static void test_ford(void)
 {
     uint8_t b[8] = {
@@ -48,6 +66,9 @@ static void test_ford(void)
     expect(!tpms_parse_ford(b, &o), "ford bad checksum");
 }
 
+/**
+ * Check a valid Toyota frame and a broken CRC.
+ */
 static void test_toyota(void)
 {
     /* Build a 9-byte Toyota frame.
@@ -79,6 +100,9 @@ static void test_toyota(void)
     expect(!tpms_parse_toyota(b, &o), "toyota bad crc");
 }
 
+/**
+ * Check a valid Schrader frame and a broken CRC.
+ */
 static void test_schrader(void)
 {
     /* Example from rtl_433 comment: 7 f6 70 3a 38 b2 00 49 49
@@ -114,6 +138,9 @@ static void test_schrader(void)
     expect(!tpms_parse_schrader(b, &o), "schrader bad crc");
 }
 
+/**
+ * Check a valid EG53 frame and a broken checksum.
+ */
 static void test_eg53(void)
 {
     uint8_t b[10] = {0x01, 0x02, 0x03, 0x04, 0xAB, 0xCD, 0xEF, 132, 68, 0};
@@ -130,6 +157,9 @@ static void test_eg53(void)
     expect(!tpms_parse_eg53(b, &o), "eg53 bad checksum");
 }
 
+/**
+ * Check a valid BMW frame and a broken check.
+ */
 static void test_bmw(void)
 {
     /* 200 kPa, temp byte 70 -> 20 C. The two check bits have to be a fixed point. */
@@ -144,6 +174,9 @@ static void test_bmw(void)
     expect(!tpms_parse_bmw(b, &o), "bmw bad check");
 }
 
+/**
+ * Check a valid Nissan frame and a broken check.
+ */
 static void test_nis(void)
 {
     uint8_t b[5] = {0x71, 0x23, 0x45, 0x68, 0};
@@ -166,6 +199,9 @@ static void test_nis(void)
     expect(!tpms_parse_nis(b, &o), "nis bad check");
 }
 
+/**
+ * Check Ford pressure and temperature conversions.
+ */
 static void test_conversions(void)
 {
     /* Ford high-pressure bit 0x20 adds 0x100 to psibits. */
@@ -185,6 +221,11 @@ static void test_conversions(void)
     expect(o.temp_c == 5, "ford 5 C");
 }
 
+/**
+ * Run every parser check.
+ *
+ * @return Zero when every check passed.
+ */
 int main(void)
 {
     fails = 0;

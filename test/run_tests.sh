@@ -14,4 +14,7 @@ PYTHON=${PYTHON:-python3}
 echo "variant / RF / layout checks"
 "$PYTHON" "$HERE/test_variants.py"
 
+echo "style / doc-block checks"
+"$PYTHON" "$HERE/test_style.py"
+
 echo "tpmsrx host tests passed"

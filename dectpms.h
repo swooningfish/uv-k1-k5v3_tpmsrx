@@ -109,8 +109,8 @@ bool tpms_parse_nis(const uint8_t b[5], tpms_pkt_t *out);
 typedef struct {
     int32_t  mean, amp, phase;
     uint32_t win;          /* last 32 PCM / OOK bits */
-    uint16_t gap;
-    uint8_t  mode, state, bitn, inv, level, half;
+    uint16_t gap, bitn;
+    uint8_t  mode, state, inv, level, half;
     uint8_t  raw[40];      /* collected payload bits, MSB first packing */
 } dectpms_t;
 

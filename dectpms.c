@@ -347,7 +347,7 @@ static void raw_clear(dectpms_t *d)
  */
 static void put_bit(dectpms_t *d, uint8_t bit)
 {
-    if (d->bitn >= (uint8_t)(sizeof d->raw * 8u)) return;
+    if (d->bitn >= sizeof d->raw * 8u) return;
     bit_set(d->raw, d->bitn++, bit);
 }
 
@@ -568,6 +568,22 @@ static bool finish_ook(dectpms_t *d, tpms_pkt_t *out)
     return false;
 }
 
+#if TPMS_HAVE_FSK
+/**
+ * Drop a payload that failed its check and hunt again on the same bit clock.
+ *
+ * FSK discriminator noise never goes quiet, so the gap rearm cannot be relied on.
+ *
+ * @param d Slicer state.
+ */
+static void hunt_again(dectpms_t *d)
+{
+    d->state = ST_HUNT;
+    d->win = 0;
+    raw_clear(d);
+}
+#endif
+
 /**
  * Advance the preamble hunt or the payload from one demodulated bit.
  *
@@ -609,7 +625,7 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
         put_bit(d, (uint8_t)(bit ^ d->inv));
         if (d->bitn >= 128u) {
             if (finish_ford(d, out)) *hit = true;
-            d->state = ST_DONE;
+            else hunt_again(d);
         }
         return;
     }
@@ -618,7 +634,7 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
         put_bit(d, bit);
         if (d->bitn >= 160u) {
             if (finish_toyota(d, out)) *hit = true;
-            d->state = ST_DONE;
+            else hunt_again(d);
         }
     }
 #else

@@ -76,7 +76,10 @@ void *memset(void *d, int c, size_t n)
 #define LED_STEP       (FS / 10u)
 /* A wake attempt is RSSI this many dB over the idle baseline. */
 #define SPIKE_DB       10
+/* RSSI reads low until the receiver settles after a park. */
+#define SETTLE_MS      1000u
 #define SEED_MS        5000u
+#define REBASE_MS      3000u
 #define MATCH_MS       1000u
 #define WAKE_MS        30000u
 
@@ -103,7 +106,7 @@ static struct {
     uint16_t ledCnt, keyCnt, colN, afCol, afNow, afPk, gap, phase;
     int16_t rssi, rssiPk;
     int32_t mean, amp, rbQ;
-    uint32_t t0, lastHot, wizAt;
+    uint32_t t0, lastHot, spikeAt, wizAt;
     bool lcd, want;
     uint8_t cap[CAP_BYTES];
     uint8_t show[CAP_BYTES];
@@ -277,6 +280,8 @@ static void commit(void)
     uint8_t n = g.bitn > CAP_BITS ? (uint8_t)CAP_BITS : g.bitn;
     uint8_t nb = (uint8_t)((n + 7u) >> 3);
     uint8_t i;
+    /* A burst that saturated the counter is a carrier or noise, not a packet. */
+    if (g.bitn == 255u) return;
     for (i = 0; i < nb; i++) g.show[i] = g.cap[i];
     for (; i < CAP_BYTES; i++) g.show[i] = 0;
     g.showN = g.bitn;
@@ -369,22 +374,28 @@ static void meterTick(void)
 /**
  * Track the idle RSSI baseline and count jumps above it as wake attempts.
  *
- * The baseline follows quickly for the first SEED_MS, then slowly, and never
- * while a jump is in progress.
+ * Nothing is learned for SETTLE_MS. The baseline then follows quickly until
+ * SEED_MS, then slowly, and not while a jump is in progress. A jump that
+ * lasts REBASE_MS is the new floor.
  */
 static void spikeTick(void)
 {
     int32_t r = (int32_t)g.rssi * 16;
     uint32_t now = g.A->ticks_ms();
+    if (now - g.t0 < SETTLE_MS) return;
     if (!g.rbOk) {
         g.rbQ = r;
         g.rbOk = 1u;
     }
     if (g.rssi >= (int32_t)(g.rbQ >> 4) + SPIKE_DB) {
-        if (!g.spiking && g.wakes < 255u) g.wakes++;
+        if (!g.spiking) {
+            if (g.wakes < 255u) g.wakes++;
+            g.spikeAt = now;
+        }
         g.spiking = 1u;
         g.lastHot = now;
-        return;
+        if (now - g.spikeAt < REBASE_MS) return;
+        g.rbQ = r;
     }
     g.spiking = 0;
     g.rbQ += (r - g.rbQ) >> ((now - g.t0 < SEED_MS) ? 2 : 6);

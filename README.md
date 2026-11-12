@@ -110,6 +110,13 @@ On F4HWN Labs, load and manage overlay apps in the browser at
 receiver is alive. A short rasp or click is a sensor burst. Silence means the
 audio path is muted or there is no signal.
 
+### Troubleshooting
+
+| You notice | Cause | Fix |
+|---|---|---|
+| Hiss stops briefly every 2.5 s with the speaker on | Demod is `AUTO`. It swaps FSK and OOK every 2.5 s until a decode, then holds for 10 s. Each swap retunes and mutes audio for a moment, and each demod only listens half the time | Press `*` for `FSK` or `OOK` if you know the sensor type. Otherwise leave `AUTO` until a sensor decodes, then set the demod shown on the status line |
+| List stays on Listening | Wrong band or demod, weak signal, or an unsupported sensor | Run `TPMS DBG`, see [docs/debug.md](docs/debug.md) |
+
 ### TPMS DBG
 
 Separate app for when a list app stays on Listening. It does not decode. It

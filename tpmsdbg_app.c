@@ -61,6 +61,8 @@ void *memset(void *d, int c, size_t n)
 #define FREQ_315       31500000u
 #define FREQ_433       43392000u
 #define KEY_EVERY      1536u
+#define REFRESH_POLLS  25u
+#define REFRESH_FAST   1u
 #define COL_SAMPLES    768u
 #define FEED_SLACK     800
 #define CAP_BITS       192u
@@ -73,13 +75,12 @@ void *memset(void *d, int c, size_t n)
 
 static struct {
     const app_api_t *A;
-    uint8_t prevKey, spk, fsk, band433, wfX, led, hot, level, half;
-    uint8_t bitn, showN, bursts, logged;
+    uint8_t prevKey, spk, fsk, band433, led, hot, level, half;
+    uint8_t bitn, showN, bursts, logged, refresh;
     uint16_t ledCnt, keyCnt, colN, afCol, afNow, afPk, gap, phase;
     int16_t rssi, rssiPk, bRssi, logRssi;
     int32_t mean, amp, bAf, logAf;
     bool lcd, want;
-    uint8_t wf[128];
     uint8_t cap[CAP_BYTES];
     uint8_t show[CAP_BYTES];
 } g;
@@ -337,39 +338,13 @@ static void push(uint16_t sample)
 }
 
 /**
- * Pack the last 20 ms of RSSI and peak audio into one column.
+ * Refresh RSSI and the 20 ms audio peak.
  */
-static void column(void)
+static void meterTick(void)
 {
-    uint8_t afh = (uint8_t)(g.afCol >> 6);
-    int16_t d = (int16_t)(g.rssi + 120);
-    uint8_t rh;
-    if (afh > 15u) afh = 15u;
     g.afNow = g.afCol;
     if (g.afCol > g.afPk) g.afPk = g.afCol;
     g.afCol = 0;
-    if (d < 0) d = 0;
-    if (d > 60) d = 60;
-    rh = (uint8_t)(d >> 2);
-    g.wf[g.wfX] = (uint8_t)((rh << 4) | afh);
-    g.wfX = (uint8_t)((g.wfX + 1u) & 127u);
-}
-
-/**
- * Draw a vertical bar upward from a pixel row.
- *
- * @param x Column.
- * @param bottom Bottom pixel, inclusive.
- * @param h Height in pixels, clamped to 15.
- */
-static void col(uint8_t x, uint8_t bottom, uint8_t h)
-{
-    uint8_t (*fb)[128] = g.A->fb;
-    if (h > 15u) h = 15u;
-    for (uint8_t i = 0; i < h; i++) {
-        uint8_t y = (uint8_t)(bottom - i);
-        fb[y >> 3][x] |= (uint8_t)(1u << (y & 7u));
-    }
 }
 
 /**
@@ -403,14 +378,14 @@ static void drawStatus(void)
 }
 
 /**
- * Draw the recorder screen and both waterfall strips.
+ * Draw the live text screen.
  */
 static void draw(void)
 {
     char str[28];
     char *o;
     uint8_t (*fb)[128] = g.A->fb;
-    uint8_t nb, x, p;
+    uint8_t nb, p;
     uint16_t r47 = g.A->bk_read(REG_47);
     uint16_t r33 = g.A->bk_read(REG_33);
 
@@ -449,12 +424,32 @@ static void draw(void)
     o = putHex(o, g.show, nb);
     tiny(str, 0, 16, o);
 
-    for (p = 3; p < 7u; p++) memset(fb[p], 0, 128);
-    for (x = 0; x < 128u; x++) {
-        uint8_t s = g.wf[(uint8_t)((g.wfX + x) & 127u)];
-        col(x, 39, (uint8_t)(s >> 4));
-        col(x, 55, (uint8_t)(s & 15u));
+    for (p = 3; p < 8u; p++) memset(fb[p], 0, 128);
+}
+
+/**
+ * Push the text rows to the LCD (drip when the speaker is on).
+ */
+static void pushLcd(void)
+{
+    if (g.spk && g.A->api_size >= 392u) {
+        g.lcd = g.A->lcd_feed(0);
+        if (!g.lcd) {
+            g.A->blit_status();
+            g.A->blit_full();
+        }
+        return;
     }
+    g.lcd = false;
+    g.A->blit_status();
+    if (g.spk) {
+        g.A->blit_page(1);
+        g.A->blit_page(2);
+        g.A->blit_page(3);
+        g.A->blit_page(4);
+        return;
+    }
+    g.A->blit_full();
 }
 
 /**
@@ -525,7 +520,6 @@ static bool keys(void)
             g.bursts = 0;
             g.logged = 0;
             g.showN = 0;
-            memset(g.wf, 0, sizeof g.wf);
             memset(g.show, 0, sizeof g.show);
             rearm();
             break;
@@ -547,7 +541,7 @@ static void listen(void)
 
     for (;;) {
         while ((int32_t)(clk() - next) < 0) {
-            if (g.lcd && (int32_t)(next - clk()) > FEED_SLACK)
+            if (g.spk && g.lcd && (int32_t)(next - clk()) > FEED_SLACK)
                 g.lcd = g.A->lcd_feed(1);
         }
         next += CYC_PER_SAMPLE;
@@ -556,7 +550,7 @@ static void listen(void)
             g.colN = 0;
             g.rssi = g.A->rssi_dbm();
             if (g.rssi > g.rssiPk) g.rssiPk = g.rssi;
-            column();
+            meterTick();
             next = clk() + CYC_PER_SAMPLE;
         }
 
@@ -566,13 +560,21 @@ static void listen(void)
             g.A->led(g.led & 1u);
         }
 
-        if (!g.want && ++g.keyCnt < KEY_EVERY) continue;
-        g.keyCnt = 0;
-        if (keys()) break;
-        g.A->backlight_update();
-        g.A->backlight_on();
+        {
+            bool needUi = g.want;
 
-        if (g.want || !g.lcd) {
+            if (!needUi
+                && ++g.refresh >= (uint8_t)(g.spk ? REFRESH_POLLS : REFRESH_FAST))
+                needUi = true;
+            if (!needUi && ++g.keyCnt < KEY_EVERY) continue;
+            g.keyCnt = 0;
+            if (keys()) break;
+            g.A->backlight_update();
+            g.A->backlight_on();
+
+            if (!g.want && !(!g.lcd && needUi)) continue;
+
+            g.refresh = 0;
             g.want = false;
             g.A->battery_sample();
             draw();
@@ -580,11 +582,7 @@ static void listen(void)
                 logBurst();
                 g.logged = g.bursts;
             }
-            if (g.A->api_size >= 392u) g.lcd = g.A->lcd_feed(0);
-            if (!g.lcd) {
-                g.A->blit_status();
-                g.A->blit_full();
-            }
+            pushLcd();
             next = clk() + CYC_PER_SAMPLE;
         }
     }
@@ -610,7 +608,6 @@ void app_main(const app_api_t *api)
     g.rssiPk = -200;
     g.logged = 0;
     g.bursts = 0;
-    memset(g.wf, 0, sizeof g.wf);
     memset(g.show, 0, sizeof g.show);
     api->led(false);
     api->backlight_on();

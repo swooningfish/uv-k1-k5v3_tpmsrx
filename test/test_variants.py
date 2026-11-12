@@ -155,7 +155,7 @@ def test_dbg_app() -> None:
     check("tpms_parse_" not in src, "recorder does not decode TPMS fields")
     check("REG_47_BYPASS" in src and "APP_AF_AM" in src, "same FSK bypass and OOK AM routes")
     check("APP_KEY_1" in src and "audio_path(g.spk" in src, "speaker toggle")
-    check("serial_write" in src and "wf[128]" in src, "USB line and waterfall")
+    check("serial_write" in src and "meterTick" in src, "USB line and live meters")
     check('tpmsdbg_app.c' in sh and 'TPMS DBG' in sh, "build.sh packs TPMS DBG")
 
 

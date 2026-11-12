@@ -120,11 +120,10 @@ bits, before Manchester or checksums).
 | `1` | Speaker. The screen is dripped out so the speaker does not flutter |
 | `2` | Toggle 315.00 / 433.92 |
 | `*` | Toggle FSK / OOK (`F` / `O` on the status line) |
-| `5` | Clear the peaks, the strips, and the last burst |
+| `5` | Clear the peaks and the last burst |
 | `EXIT` | Quit |
 
-The top strip is signal strength, the bottom strip is audio level, newest
-column on the right. About 2.5 s across. The lines under the status bar:
+The lines under the status bar:
 
 | Text | Meaning |
 |---|---|

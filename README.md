@@ -148,10 +148,12 @@ A valid decode blinks the green LED, including while the backlight is off.
 
 ## Screen
 
-The status line shows `TPMS` (or `MENU`) on the left, a light bulb when the
-backlight setting is on, the band and demod just left of the battery, and the
+The status line shows `TPMS` (or `MENU`) on the left, a light bulb while the
+backlight is lit, the band and demod just left of the battery, and the
 battery percent plus icon on the right (same F4HWN / Temp 433 status battery).
-`0` hides the bulb. It comes back with the light on the next key.
+The bulb goes when the light times out or `0` turns it off, and comes back
+with the light on the next key. An `S` after the demod means the speaker is
+on. Its space is always kept, so the status line does not move.
 
 While no sensors have been heard, the listening line is
 `LISTENING <band> <region>`, then the car / protocol lines, then free-row

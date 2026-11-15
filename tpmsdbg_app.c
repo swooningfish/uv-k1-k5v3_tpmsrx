@@ -422,12 +422,11 @@ static void drawStatus(void)
     }
     *o++ = ' ';
     *o++ = (char)(g.fsk ? 'F' : 'O');
-    if (g.spk) {
-        *o++ = ' ';
-        *o++ = 'S';
-    }
+    /* Always reserve the speaker slot so the band never shifts. */
+    *o++ = ' ';
+    *o++ = g.spk ? 'S' : ' ';
     *o = '\0';
-    w = (unsigned)(o - str) * 4u;
+    w =(unsigned)(o - str) * 4u;
     g.A->print_tiny(str, (uint8_t)(128u - 48u - w), 1, true, true);
 }
 

@@ -435,10 +435,10 @@ static void upsert(const tpms_pkt_t *p, int16_t rssi)
 }
 
 /**
- * Draw the status bulb when the light setting is on and the gap fits.
+ * Draw the status bulb while the backlight is lit and the gap fits.
  *
  * The bulb sits between the title capsule and the band.
- * Display off hides it, including after the 0 key.
+ * It hides when the idle timeout turns the lamp off, and after the 0 key.
  *
  * @param bandX Left edge of the band text, in pixels.
  */
@@ -446,7 +446,7 @@ static void drawLight(uint8_t bandX)
 {
     uint8_t *line;
     unsigned gap;
-    if (g.cfg.disp != DISP_TMO) return;
+    if (g.cfg.disp != DISP_TMO || g.blOff) return;
     if (bandX < TITLE_CAP_END + 2u + sizeof LIGHT_ICON) return;
     line = g.A->status_line;
     if (!line) return;
@@ -471,10 +471,9 @@ static void drawStatus(const char *ui)
     o = putBand(str);
     *o++ = ' ';
     o = put(o, modeLabel(ui));
-    if (g.spk) {
-        *o++ = ' ';
-        *o++ = 'S';
-    }
+    /* Always reserve the speaker slot so the band and bulb never shift. */
+    *o++ = ' ';
+    *o++ = g.spk ? 'S' : ' ';
     *o = '\0';
     width = (unsigned)(o - str) * 4u;
     /* 22 px clears the title capsule. 48 px covers the battery icon plus text. */

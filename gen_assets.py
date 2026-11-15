@@ -49,6 +49,11 @@ UI = [
     }[os.environ.get("FLAVOUR", "eu")],
     ("T_MENU", "MENU"),
     ("T_BAND", "BAND"),
+    ("T_SENS", "SENS"),
+    # Sensitivity levels, indexed by the saved setting (0 low .. 2 high).
+    ("T_SLO", "LOW"),
+    ("T_SMID", "MID"),
+    ("T_SHI", "HIGH"),
     ("T_CLR", "CLEAR"),
     ("T_HELP1", HELP1_VER),
     ("T_HELP2", "MENU CHANGE"),
@@ -56,10 +61,10 @@ UI = [
     # Listening-screen key strip (no MENU — that is the bottom-left capsule).
     # Omit band when the flavour locks it. No app switches demod.
     *{
-        "eu": [("T_HINT", "2 BAND  0 LIGHT")],
-        "na": [("T_HINT", "2 BAND  0 LIGHT")],
-        "eu2": [("T_HINT", "0 LIGHT")],
-        "na2": [("T_HINT", "0 LIGHT")],
+        "eu": [("T_HINT", "1 SPK  2 BAND  0 LIGHT")],
+        "na": [("T_HINT", "1 SPK  2 BAND  0 LIGHT")],
+        "eu2": [("T_HINT", "1 SPK  0 LIGHT")],
+        "na2": [("T_HINT", "1 SPK  0 LIGHT")],
     }[os.environ.get("FLAVOUR", "eu")],
 ]
 a = Assets("TPMS_RX")
@@ -70,7 +75,7 @@ for name, value in UI:
     ui_size += len(value) + 1 + pad
 a.const("UI_SIZE", ui_size)
 a.const("T_TITLE_CHARS", len(TITLE))
-# EU2 / NA2: CLEAR only (fixed band). EU / NA: BAND + CLEAR.
+# EU2 / NA2: SENS + CLEAR (fixed band). EU / NA: BAND + SENS + CLEAR.
 _flavour = os.environ.get("FLAVOUR", "eu")
-a.const("MENU_ITEMS", {"eu2": 1, "na2": 1}.get(_flavour, 2))
+a.const("MENU_ITEMS", {"eu2": 2, "na2": 2}.get(_flavour, 3))
 a.main()

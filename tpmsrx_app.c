@@ -63,7 +63,10 @@ void *memset(void *d, int c, size_t n)
 #define KEY_EVERY      1536u
 #define DRAW_HOLD_MS   200u
 #define LED_STEP       (FS / 10u)
-#define CFG_MAGIC      0xB2u
+#define CFG_MAGIC      0xB3u
+/* Sensitivity: 0 low, 1 mid (the old fixed gate), 2 high. */
+#define SENS_LEVELS    3u
+#define SENS_DEFAULT   1u
 #define ROWS           7u
 /* One demod per app: EU / NA are FSK (Ford, Toyota), EU2 / NA2 are OOK. */
 #if TPMS_HAVE_FSK
@@ -76,15 +79,18 @@ void *memset(void *d, int c, size_t n)
 #if defined(TPMS_FLAVOUR_EU2)
 #define TPMS_LOCK_BAND 1
 #define TPMS_BAND433   1u
-#define MENU_CLR       0u
+#define MENU_SENS      0u
+#define MENU_CLR       1u
 #elif defined(TPMS_FLAVOUR_NA2)
 #define TPMS_LOCK_BAND 1
 #define TPMS_BAND433   0u
-#define MENU_CLR       0u
+#define MENU_SENS      0u
+#define MENU_CLR       1u
 #else
 #define TPMS_LOCK_BAND 0
 #define MENU_BAND      0u
-#define MENU_CLR       1u
+#define MENU_SENS      1u
+#define MENU_CLR       2u
 #endif
 #define DISP_OFF       1u
 #define DISP_TMO       2u
@@ -106,6 +112,12 @@ static const uint8_t LIGHT_ICON[9] = {
     0x0Cu, 0x12u, 0x21u, 0x6Du, 0x79u, 0x6Du, 0x21u, 0x12u, 0x0Cu
 };
 
+/* Decoder signal gate per sensitivity level. RF gain is already fixed at
+ * maximum (AGC off), so this is the knob: a lower gate lets weaker bursts
+ * through, a higher one ignores more noise and distant cars. */
+static const uint8_t SENS_GATE[SENS_LEVELS] = { 60u, 40u, 28u };
+static const uint16_t SENS_LABEL[SENS_LEVELS] = { T_SLO, T_SMID, T_SHI };
+
 /* Speaker: box, cone, one sound wave. 7 status columns, LSB is the top pixel. */
 static const uint8_t SPK_ICON[7] = {
     0x1Cu, 0x1Cu, 0x3Eu, 0x7Fu, 0x00u, 0x22u, 0x1Cu
@@ -122,6 +134,7 @@ typedef struct {
 
 typedef struct {
     uint8_t band433;
+    uint8_t sens;     /* 0 low .. 2 high */
     uint8_t disp;     /* DISP_OFF / DISP_TMO */
 } app_cfg_t;
 
@@ -261,6 +274,17 @@ static char *putBand(char *o)
         *o++ = '0';
     }
     return o;
+}
+
+/**
+ * Reset the slicer for this app's demod at the saved sensitivity.
+ *
+ * @param dec Slicer to reset.
+ */
+static void decInit(dectpms_t *dec)
+{
+    dectpms_init(dec, TPMS_PATH);
+    dec->gate = SENS_GATE[g.cfg.sens];
 }
 
 /**
@@ -484,9 +508,9 @@ static void drawMenu(const char *ui)
     char str[32]; /* 31-cell help row with the version + NUL */
     char *o;
 #if TPMS_LOCK_BAND
-    const uint16_t labels[1] = { T_CLR };
+    const uint16_t labels[2] = { T_SENS, T_CLR };
 #else
-    const uint16_t labels[2] = { T_BAND, T_CLR };
+    const uint16_t labels[3] = { T_BAND, T_SENS, T_CLR };
 #endif
     for (uint8_t i = 0; i < MENU_ITEMS; i++) {
         o = str;
@@ -498,6 +522,10 @@ static void drawMenu(const char *ui)
             o = putBand(o);
         }
 #endif
+        if (i == MENU_SENS) {
+            *o++ = ' ';
+            o = put(o, ui + SENS_LABEL[g.cfg.sens]);
+        }
         *o = '\0';
         /* Capsules like CW Keyer help: selected row is the full-width mark. */
         g.A->print_inverse(str, 2, (uint8_t)(i + 1u), false, true,
@@ -623,9 +651,13 @@ static void menuChange(dectpms_t *dec)
         case MENU_BAND:
             g.cfg.band433 ^= 1u;
             applyRf();
-            dectpms_init(dec, TPMS_PATH);
+            decInit(dec);
             break;
 #endif
+        case MENU_SENS:
+            if (++g.cfg.sens >= SENS_LEVELS) g.cfg.sens = 0;
+            decInit(dec);
+            break;
         case MENU_CLR:
             g.nRows = 0;
             g.menu = 0; /* back to the listening screen */
@@ -633,9 +665,6 @@ static void menuChange(dectpms_t *dec)
         default:
             break;
     }
-#if TPMS_LOCK_BAND
-    (void)dec;
-#endif
 }
 
 /**
@@ -693,7 +722,7 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
         case APP_KEY_2:
             g.cfg.band433 ^= 1u;
             applyRf();
-            dectpms_init(dec, TPMS_PATH);
+            decInit(dec);
             break;
 #endif
         case APP_KEY_0:
@@ -743,7 +772,7 @@ __attribute__((noinline))
 static void listen(const char *ui)
 {
     dectpms_t dec;
-    dectpms_init(&dec, TPMS_PATH);
+    decInit(&dec);
     uint32_t (*const clk)(void) = g.A->cycles_48mhz;
     uint16_t (*const sample)(void) = g.A->af_capture_sample;
     uint32_t next = clk();
@@ -857,11 +886,13 @@ void app_main(const app_api_t *api)
 
     /* Defaults per flavour (first launch). The saved band is restored when
      * present, then EU2 forces 433.92 and NA2 forces 315.00. Byte 2 held the
-     * old demod choice and is ignored: each app has one demod now. */
+     * old demod choice (0xB1 / 0xB2) and now holds the sensitivity (0xB3). */
     api->cfg_load(cfg, 4);
-    if (cfg[0] == CFG_MAGIC || cfg[0] == 0xB1u) {
+    g.cfg.sens = SENS_DEFAULT;
+    if (cfg[0] == CFG_MAGIC || cfg[0] == 0xB2u || cfg[0] == 0xB1u) {
         g.cfg.band433 = cfg[1] ? 1u : 0u;
-        if (cfg[0] == CFG_MAGIC && cfg[3] == DISP_OFF) g.cfg.disp = DISP_OFF;
+        if (cfg[0] != 0xB1u && cfg[3] == DISP_OFF) g.cfg.disp = DISP_OFF;
+        if (cfg[0] == CFG_MAGIC && cfg[2] < SENS_LEVELS) g.cfg.sens = cfg[2];
     } else {
 #if defined(TPMS_FLAVOUR_NA) || defined(TPMS_FLAVOUR_NA2)
         g.cfg.band433 = 0u; /* 315.00 MHz */
@@ -890,7 +921,7 @@ void app_main(const app_api_t *api)
 
     cfg[0] = CFG_MAGIC;
     cfg[1] = g.cfg.band433;
-    cfg[2] = TPMS_PATH;
+    cfg[2] = g.cfg.sens;
     cfg[3] = g.cfg.disp;
     api->cfg_save(cfg, 4);
 }

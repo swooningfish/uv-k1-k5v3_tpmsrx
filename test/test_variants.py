@@ -50,10 +50,10 @@ def flavour_ui(flavour: str) -> dict[str, str]:
         "na2": ("OOK: CHEVROLET|GM|SCHRADER", "OOK: SUBARU|NISSAN"),
     }
     hints = {
-        "eu": "2 BAND  0 LIGHT",
-        "na": "2 BAND  0 LIGHT",
-        "eu2": "0 LIGHT",
-        "na2": "0 LIGHT",
+        "eu": "1 SPK  2 BAND  0 LIGHT",
+        "na": "1 SPK  2 BAND  0 LIGHT",
+        "eu2": "1 SPK  0 LIGHT",
+        "na2": "1 SPK  0 LIGHT",
     }
     band = "433.92" if flavour in ("eu", "eu2") else "315.00"
     mode = "OOK" if flavour in ("eu2", "na2") else "FSK"

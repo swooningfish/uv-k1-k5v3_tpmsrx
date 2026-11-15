@@ -79,8 +79,8 @@ VARIANTS = {
         "status": "433.92 FSK",
         "listen": "LISTENING 433.92 UK/EU",
         "cars": ("FSK: FORD|TOYOTA", "V" + APP_VER),
-        "hints": "2 BAND  0 LIGHT",
-        "menu": [(">BAND 433.92", 100), (" CLEAR", 78)],
+        "hints": "1 SPK  2 BAND  0 LIGHT",
+        "menu": [(">BAND 433.92", 100), (" SENS MID", 78), (" CLEAR", 78)],
         "menu_status": "433.92 FSK",
     },
     "na": {
@@ -88,8 +88,8 @@ VARIANTS = {
         "status": "315.00 FSK",
         "listen": "LISTENING 315.00 US/CA",
         "cars": ("FSK: FORD|TOYOTA", "V" + APP_VER),
-        "hints": "2 BAND  0 LIGHT",
-        "menu": [(">BAND 315.00", 100), (" CLEAR", 78)],
+        "hints": "1 SPK  2 BAND  0 LIGHT",
+        "menu": [(">BAND 315.00", 100), (" SENS MID", 78), (" CLEAR", 78)],
         "menu_status": "315.00 FSK",
     },
     "eu2": {
@@ -97,8 +97,8 @@ VARIANTS = {
         "status": "433.92 OOK",
         "listen": "LISTENING 433.92 UK/EU",
         "cars": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI|SCHRADER"),
-        "hints": "0 LIGHT",
-        "menu": [(">CLEAR", 100)],
+        "hints": "1 SPK  0 LIGHT",
+        "menu": [(">SENS MID", 100), (" CLEAR", 78)],
         "menu_status": "433.92 OOK",
     },
     "na2": {
@@ -106,8 +106,8 @@ VARIANTS = {
         "status": "315.00 OOK",
         "listen": "LISTENING 315.00 US/CA",
         "cars": ("OOK: CHEVROLET|GM|SCHRADER", "OOK: SUBARU|NISSAN"),
-        "hints": "0 LIGHT",
-        "menu": [(">CLEAR", 100)],
+        "hints": "1 SPK  0 LIGHT",
+        "menu": [(">SENS MID", 100), (" CLEAR", 78)],
         "menu_status": "315.00 OOK",
     },
 }

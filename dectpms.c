@@ -372,6 +372,7 @@ void dectpms_init(dectpms_t *d, uint8_t mode)
     d->inv = 0;
     d->level = 0;
     d->half = 0;
+    d->gate = HYST;
     raw_clear(d);
 }
 
@@ -718,13 +719,14 @@ bool dectpms_push(dectpms_t *d, uint16_t sample, tpms_pkt_t *out)
     if (ay > d->amp) d->amp = ay;
     else d->amp -= (d->amp >> 6);
 
-    int32_t thr = (d->amp > (HYST * 4)) ? (d->amp >> 3) : HYST;
+    int32_t gate = d->gate;
+    int32_t thr = (d->amp > (gate * 4)) ? (d->amp >> 3) : gate;
     uint8_t lvl = d->level;
     if (y > thr) lvl = 1u;
     else if (y < -thr) lvl = 0u;
     d->level = lvl;
 
-    bool active = d->amp > (HYST * 3);
+    bool active = d->amp > (gate * 3);
     if (!active) {
         if (d->gap < 0xffffu) d->gap++;
         uint16_t lim = (d->mode == TPMS_MODE_FSK) ? GAP_FSK : GAP_OOK;

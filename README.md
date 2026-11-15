@@ -83,6 +83,7 @@ A good decode blinks the green LED, even with the backlight off.
 | Item | What it does |
 |---|---|
 | `BAND` | `315.00` / `433.92`. Only in `TPMS EU` and `TPMS NA` |
+| `SENS` | Sensitivity: `LOW` / `MID` / `HIGH` (default `MID`). `HIGH` hears weaker, more distant sensors; `LOW` ignores more noise and far-off cars. Saved on exit |
 | `CLEAR` | Wipe the list |
 
 `UP` / `DOWN` (the navigation keys on the UV-K1) select an item. `MENU`, `2`
@@ -104,7 +105,7 @@ The status line shows, from left to right:
 
 Before any sensor is heard, the screen shows `LISTENING <band> <region>` and
 the cars that app decodes. While there are three or fewer sensors, the free
-rows show key hints.
+rows show key hints (`1 SPK`, `2 BAND`, `0 LIGHT`).
 
 The list holds up to seven sensors. A sensor that is heard again updates its
 own row.
@@ -220,7 +221,7 @@ python3 tools/fetch_sdk.py   # downloads the F4HWN app SDK into sdk/
 - The release version is `APP_VER` in `build.sh`.
 
 Code sizes in v1.3.0 (each app must fit the 4 KB app space): `TPMS EU` and
-`TPMS NA` 3564 B, `TPMS EU2` 3456 B, `TPMS NA2` 3512 B, `TPMS DBG` 3916 B.
+`TPMS NA` 3764 B, `TPMS EU2` 3784 B, `TPMS NA2` 3840 B, `TPMS DBG` 3948 B.
 
 ## License
 

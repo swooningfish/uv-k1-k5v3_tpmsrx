@@ -114,11 +114,14 @@ typedef struct {
     uint32_t win;          /* last 32 PCM / OOK bits */
     uint16_t gap, bitn;
     uint8_t  mode, state, inv, level, half;
+    uint8_t  gate;         /* signal gate (HYST): lower hears weaker bursts */
     uint8_t  raw[40];      /* collected payload bits, MSB first packing */
 } dectpms_t;
 
 /**
  * Clear the slicer and select FSK or OOK.
+ *
+ * The signal gate starts at the default; callers may lower or raise it.
  *
  * @param d Slicer state.
  * @param mode TPMS_MODE_FSK or TPMS_MODE_OOK.

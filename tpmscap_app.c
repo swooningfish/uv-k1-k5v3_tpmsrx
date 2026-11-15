@@ -14,14 +14,18 @@
  *   0x81 s v  settings: s bit 0 band (1 = 433.92), bits 2:1 IF preset,
  *             bits 6:3 tuning offset nibble (two's complement, 5 kHz steps);
  *             v bits 1:0 the SENS level (0 LOW, 1 MID, 2 HIGH), bit 2 the
- *             forced backlight
+ *             forced backlight, bit 3 the demod (1 = OOK)
+ *   0x82 m    the radio's own decoder accepted a packet of model m
  *
  * The PC can set them too. A command is 0xA5, c, c ^ 0xFF (the check byte
  * keeps line noise from changing a setting); c is a field and a value:
  *   0x1v band (v 1 = 433.92)   0x2v IF preset    0x3v offset nibble
  *   0x4v SENS level            0x5v backlight    0x60 clear counters
- *   0x70 send the settings record now
- *   0x82 m    the radio's own decoder accepted a packet of model m
+ *   0x70 send the settings record now            0x8v demod (v 1 = OOK)
+ *
+ * OOK routes AM audio as TPMS EU2 / NA2 do, for Schrader, GM, BMW and Nissan
+ * sensors. Only the FSK parsers fit here, so in OOK the PC does all the
+ * decoding and no 0x82 records are sent.
  *
  * The app API reserves the K-plug port but does not implement it yet, so
  * this app drives USART1 of the PY32F071 directly. The resident firmware has
@@ -100,6 +104,8 @@ void *memset(void *d, int c, size_t n)
 #define SENS_DEFAULT   1u
 /* cfg[1]: bit 0 band, bit 1 the force backlight option (key 0). */
 #define CFG_LIGHT      0x02u
+/* cfg[1] bit 2: OOK demod (AM audio) instead of FSK. */
+#define CFG_OOK        0x04u
 /* As TPMS EU: the lamp stays on this long after the last key, unless forced. */
 #define DISP_IDLE_MS   10000u
 /* Radio backlight time in storage (gEeprom.BACKLIGHT_TIME, firmware v6.3.0
@@ -149,7 +155,7 @@ static struct {
     const app_api_t *A;
     uint8_t prevKey, spk, band433, ifp, foff, led, uart, lost, drawDue;
     uint8_t acc, accN, head, tail;
-    uint8_t light, blOff, blTime, sens;  /* forced lamp, lamp released, radio BL time */
+    uint8_t light, blOff, blTime, sens, ook;  /* forced lamp, lamp released, radio BL time */
     uint8_t rxState, rxCmd, cmd;  /* PC command parser; cmd waits for the next poll */
     uint16_t ledCnt, keyCnt, hits, gaps;
     uint32_t brr, cr3, sent, setCnt, lastNote, lastDraw, lastKey;
@@ -348,7 +354,7 @@ static void markSettings(void)
 {
     queue(MARK_SET);
     queue((uint8_t)(g.band433 | (g.ifp << 1) | (g.foff << 3)));
-    queue((uint8_t)(g.sens | (g.light << 2)));
+    queue((uint8_t)(g.sens | (g.light << 2) | (g.ook << 3)));
     g.setCnt = 0;
 }
 
@@ -359,7 +365,7 @@ static void markSettings(void)
  */
 static void decInit(dectpms_t *dec)
 {
-    dectpms_init(dec, TPMS_MODE_FSK);
+    dectpms_init(dec, g.ook ? TPMS_MODE_OOK : TPMS_MODE_FSK);
     dec->gate = SENS_GATE[g.sens];
 }
 
@@ -433,7 +439,9 @@ static void applyRf(void)
     g.A->bk_write(REG_73, (uint16_t)(g.A->bk_read(REG_73) | 0x0010u));
     g.A->bk_write(REG_43, IF_PRESET[g.ifp]);
     g.A->set_agc(false);
-    g.A->bk_write(REG_47, REG_47_BYPASS);
+    /* AF last: FSK = raw bypass, OOK = AM, as TPMS EU / EU2. */
+    if (g.ook) g.A->set_af(APP_AF_AM);
+    else g.A->bk_write(REG_47, REG_47_BYPASS);
     selectUhfLna();
     g.A->audio_path(g.spk != 0u);
 }
@@ -456,7 +464,8 @@ static void draw(const dectpms_t *dec)
     g.A->status_clear();
     g.A->draw_battery();
     g.A->print_inverse("CAP", 2, 0, true, true, 14);
-    o = put(str, g.band433 ? "433.92 FSK" : "315.00 FSK");
+    o = put(str, g.band433 ? "433.92 " : "315.00 ");
+    o = put(o, g.ook ? "OOK" : "FSK");
     *o = '\0';
     g.A->print_tiny(str, BAND_X, 1, true, true);
     /* The bulb sits between the capsule and the band while the lamp is forced on. */
@@ -486,7 +495,7 @@ static void draw(const dectpms_t *dec)
     row(str, 32, o);
     o = put(str, "2 BAND * IF 3 SENS 0 LIGHT");
     row(str, 40, o);
-    o = put(str, "ARROWS OFS 1 SPK 5 CLR");
+    o = put(str, "ARROWS OFS 4 DEMOD 1 SPK 5 CLR");
     row(str, 49, o);
     g.A->blit_page(0);
     g.A->blit_page(8);
@@ -549,6 +558,9 @@ static void applyCmd(uint8_t c, dectpms_t *dec)
         case 6u:
             clearCounts(dec);
             return;
+        case 8u:
+            g.ook = (uint8_t)(v & 1u);
+            break;
         case 7u:
             markSettings();
             return;
@@ -589,6 +601,10 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             break;
         case APP_KEY_STAR:
             g.ifp = (uint8_t)((g.ifp + 1u) & 3u);
+            break;
+        case APP_KEY_4:
+            /* FSK (Ford, Toyota) or OOK (Schrader, GM, BMW, Nissan). */
+            g.ook ^= 1u;
             break;
         case APP_KEY_3:
             /* SENS LOW / MID / HIGH, as in TPMS EU. No retune needed. */
@@ -729,6 +745,7 @@ void app_main(const app_api_t *api)
     if (cfg[0] == CFG_MAGIC) {
         g.band433 = cfg[1] & 1u;
         g.light = (cfg[1] & CFG_LIGHT) ? 1u : 0u;
+        g.ook = (cfg[1] & CFG_OOK) ? 1u : 0u;
         g.ifp = cfg[2] & 3u;
         g.sens = (uint8_t)((cfg[2] >> 2) & 3u);
         g.foff = cfg[3] & 15u;
@@ -760,7 +777,7 @@ void app_main(const app_api_t *api)
     api->led(false);
 
     cfg[0] = CFG_MAGIC;
-    cfg[1] = (uint8_t)(g.band433 | (g.light ? CFG_LIGHT : 0u));
+    cfg[1] = (uint8_t)(g.band433 | (g.light ? CFG_LIGHT : 0u) | (g.ook ? CFG_OOK : 0u));
     cfg[2] = (uint8_t)(g.ifp | (g.sens << 2));
     cfg[3] = g.foff;
     api->cfg_save(cfg, 4);

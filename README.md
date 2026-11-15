@@ -30,7 +30,7 @@ uses. If you are not sure, install both apps for your region.
 | `TPMS EU2` | UK and Europe | 433.92 MHz, fixed | OOK | Schrader MRXGG4; Vauxhall, Opel, Saab; BMW and Mini (older Schrader sensor) |
 | `TPMS NA2` | United States and Canada | 315 MHz, fixed | OOK | Schrader MRXGG4; Chevrolet and other GM; Subaru; Nissan and Infiniti |
 | `TPMS DBG` | Either | 433.92 MHz (can switch) | FSK or OOK | No decoding: records raw bursts to find out why a list app hears nothing |
-| `TPMS CAP` | Either | 433.92 MHz (can switch) | FSK | Streams the sliced audio over the K-plug cable to a PC, where the browser page `tools/kplug.html` decodes Toyota and Ford bursts bit by bit. See [docs/kplug.md](docs/kplug.md) |
+| `TPMS CAP` | Either | 433.92 MHz (can switch) | FSK or OOK | Streams the sliced audio over the K-plug cable to a PC, where the browser page `tools/kplug.html` decodes every sensor above, plus the Pacific PMV-107J, bit by bit. See [docs/kplug.md](docs/kplug.md) |
 
 - `TPMS EU` and `TPMS NA` are the same app with a different starting band.
   A band you change is remembered.

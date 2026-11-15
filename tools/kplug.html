@@ -54,6 +54,11 @@ button:disabled { opacity: .5; cursor: default; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line); padding: 5px 10px; }
 .seg button:last-child { border-right: 0; }
+.seg button small { display: block; font-size: 10.5px; font-weight: 400; opacity: .75; }
+/* IF: 2 by 2, 25 kHz on top and 12.5 kHz below, "alt" on the right. */
+#cIf { display: inline-grid; grid-template-columns: 1fr 1fr; }
+#cIf button:nth-child(2n) { border-right: 0; }
+#cIf button:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
 .seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .seg button.wait { outline: 2px dashed var(--warn); outline-offset: -3px; }
 .ctl { display: grid; grid-template-columns: 70px 1fr; gap: 8px 10px; align-items: center; }
@@ -67,6 +72,11 @@ button:disabled { opacity: .5; cursor: default; }
 details.sweep { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
 details.sweep summary { cursor: pointer; font-weight: 600; }
 details.sweep .ctl { margin: 10px 0; }
+#swPlan { font-weight: 600; color: var(--ink); }
+details.txinfo { margin-top: 10px; }
+details.txinfo summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+table.tx { font-size: 12.5px; margin-top: 6px; }
+table.tx td, table.tx th { vertical-align: top; white-space: normal; }
 details.sweep select, details.sweep input[type=number] { padding: 4px 6px; }
 .tablewrap { overflow-x: auto; }
 table.board td, table.board th { white-space: nowrap; }
@@ -76,7 +86,7 @@ table.board td.rank { font-weight: 700; }
 table.board button { padding: 2px 8px; font-size: 12px; }
 .offv { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
   white-space: nowrap; }
-.dash { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px; }
+.dash { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 12px; }
 .dash div { background: var(--pill); border-radius: 8px; padding: 6px 4px; text-align: center; }
 .dash b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
 .dash span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
@@ -128,8 +138,9 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 <body>
 <main>
   <h1>TPMS K-plug monitor</h1>
-  <p class="sub">Decodes the bursts the <b>TPMS CAP</b> radio app streams over the K-plug cable:
-    Toyota (PMV-C210), Pacific PMV-107J and Ford, with the rtl_433 decoders.</p>
+  <p class="sub">Decodes the bursts the <b>TPMS CAP</b> radio app streams over the K-plug cable,
+    with the rtl_433 decoders. FSK: Toyota (PMV-C210), Pacific PMV-107J and Ford. OOK: Schrader
+    MRXGG4, GM (EG53), BMW / Mini and Nissan / Subaru.</p>
 
   <div class="grid">
     <div>
@@ -157,8 +168,9 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
         <h2>📻 Radio settings</h2>
         <div class="dash">
           <div><b id="dBand">–</b><span>Band</span></div>
+          <div><b id="dDemod">–</b><span>Demod</span></div>
           <div><b id="dOff">–</b><span>Offset</span></div>
-          <div><b id="dIf">–</b><span>IF</span></div>
+          <div><b id="dIf">–</b><span id="dIfCode">IF</span></div>
           <div><b id="dSens">–</b><span>Sens</span></div>
           <div><b id="dLight">–</b><span>Light</span></div>
         </div>
@@ -166,6 +178,11 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
           <span class="lbl">Band</span>
           <span class="seg" id="cBand">
             <button data-v="0">315.00</button><button data-v="1">433.92</button>
+          </span>
+          <span class="lbl">Demod</span>
+          <span class="seg" id="cDemod">
+            <button data-v="0" title="FSK: Ford, Toyota (PMV-C210, PMV-107J)">FSK</button><button
+              data-v="1" title="OOK: Schrader, GM (EG53), BMW / Mini, Nissan / Subaru">OOK</button>
           </span>
           <span class="lbl">Offset<br><span id="offVal" class="offv">–</span></span>
           <span class="offrow">
@@ -185,11 +202,18 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
           </datalist>
           <span class="lbl">IF</span>
           <span class="seg" id="cIf">
-            <button data-v="0" title="Default: 25 kHz mode">7E2C</button><button data-v="1"
-              title="25 kHz mode, demod gain bit flipped">7E28</button><button data-v="2"
-              title="12.5 kHz mode: more audio per kHz">7E0C</button><button data-v="3"
-              title="12.5 kHz mode, gain bit flipped">7E08</button>
+            <button data-v="0" title="25 kHz bandwidth: the default of every list app"
+              >25 kHz<small>7E2C · default</small></button><button data-v="1"
+              title="25 kHz bandwidth, FM-demod gain bit flipped">25 kHz alt<small>7E28</small
+              ></button><button data-v="2" title="12.5 kHz bandwidth: narrower, less noise"
+              >12.5 kHz<small>7E0C</small></button><button data-v="3"
+              title="12.5 kHz bandwidth, FM-demod gain bit flipped">12.5 kHz alt<small>7E08</small
+              ></button>
           </span>
+          <span></span>
+          <span id="ifNote" class="hint" style="margin:0"><b>Default: 25 kHz (7E2C)</b>, as every
+            list app uses. Bandwidth: 25 kHz catches sensors that sit off frequency; 12.5 kHz lets
+            in less noise. <b>alt</b> flips the gain bit (a 6 dB step) after the FM demod.</span>
           <span class="lbl">Sens</span>
           <span class="seg" id="cSens">
             <button data-v="0">LOW</button><button data-v="1">MID</button><button data-v="2">HIGH</button>
@@ -208,10 +232,12 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
         <details class="sweep" id="sweepBox">
           <summary>🔁 Auto sweep</summary>
           <div class="ctl">
+            <span class="lbl">Demod</span>
+            <label><input id="swDemod" type="checkbox"> both FSK and OOK</label>
             <span class="lbl">Offsets</span>
             <span class="row"><select id="swFrom"></select> to <select id="swTo"></select></span>
             <span class="lbl">IF</span>
-            <label><input id="swIf" type="checkbox"> all 4 presets</label>
+            <label><input id="swIf" type="checkbox"> all 4 presets (25 / 12.5 kHz, and alt)</label>
             <span class="lbl">Sens</span>
             <label><input id="swSens" type="checkbox"> all 3 levels</label>
             <span class="lbl">Time</span>
@@ -221,9 +247,31 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             <button id="swStart" class="primary">Start sweep</button>
             <button id="swStop" disabled>Stop</button>
           </div>
+          <p id="swPlan" class="hint"></p>
           <p id="swInfo" class="hint">Each setting gets the same time, so the leaderboard
             compares them fairly. Keep waking the sensor all through: a TPMS tool on repeat
             works best.</p>
+          <details class="txinfo">
+            <summary>📡 How often sensors transmit</summary>
+            <table class="tx">
+              <thead><tr><th>Sensor state</th><th>Typical</th></tr></thead>
+              <tbody>
+                <tr><td>Parked</td><td>Asleep: very rarely or not at all. Ford sends once
+                  after stopping, then about every 6 hours.</td></tr>
+                <tr><td>Driving (over about 20–25 km/h)</td><td>About once a minute, a short
+                  burst of a few repeated frames (Ford about 4).</td></tr>
+                <tr><td>Fast pressure change</td><td>Straight away, then every few seconds
+                  while it keeps changing.</td></tr>
+                <tr><td>TPMS trigger tool</td><td>Straight away; a burst of frames (Ford sends
+                  12 in learn mode).</td></tr>
+              </tbody>
+            </table>
+            <p class="hint">Figures vary by maker. On a parked car a step with nothing waking
+              the sensor records nothing, so trigger it every few seconds with a tool, or let a
+              little air out in short bursts. Make each step longer than the gap between your
+              triggers, so every step gets several bursts. Driving gives one burst a minute: too
+              slow to sweep, fine to check a setting you already found.</p>
+          </details>
         </details>
       </section>
 
@@ -246,6 +294,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
           <li>Close UV Studio and K5Viewer: they share the cable.</li>
           <li>Start <b>TPMS CAP</b> on the radio. It should show <code>K-PLUG 115200: KPLUG.HTML</code>.</li>
           <li>Press <b>Connect</b> and pick the cable's port.</li>
+          <li>Pick the demod: <b>FSK</b> for Ford and Toyota, <b>OOK</b> for Schrader, GM,
+            BMW / Mini and Nissan / Subaru (key <code>4</code> on the radio).</li>
           <li>Wake the sensor next to the radio. Use <code>UP</code>/<code>DOWN</code>,
             <code>*</code> and <code>3</code> on the radio to try offsets, IF presets and
             SENS levels.</li>
@@ -333,7 +383,12 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     const MARK_HIT = 0x82;
     const RADIO_MODELS = { 0: 'FORD', 1: 'TOYOTA', 2: 'SCHRADER', 3: 'EG53', 4: 'BMW', 5: 'NISSAN' };
     const IF_PRESETS = [0x7E2C, 0x7E28, 0x7E0C, 0x7E08];
-    const OVERLAP = 800;
+    /* REG_43 bits 5:4 pick the 25 or 12.5 kHz bandwidth mode; "alt" has bit 2,
+       the gain after the FM demod, flipped. 7E2C is what every list app uses. */
+    const IF_NAMES = ['25 kHz', '25 kHz alt', '12.5 kHz', '12.5 kHz alt'];
+    /* Samples kept between passes so a burst cut by a pass is decoded whole next
+       time. The longest frame, an EG53 at 241 OOK chips, is about 1110 samples. */
+    const OVERLAP = 1400;
     const LEAD = 64;
     const CHUNK = FS / 2;
     const MERGE = 40;
@@ -566,8 +621,214 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     const PROTOCOLS = [['TOYOTA', SPC_52, toyota], ['FORD', SPC_52, ford],
                        ['PMV-107J', SPC_100, pmv107j]];
 
-    /** Run every decoder with both chip clocks. Returns [sample, model, score, desc, chips]. */
-    function decodeSamples(samples) {
+
+    /* ---- OOK: TPMS CAP on AM audio (key 4). Ported from dectpms.c. ---- */
+
+    /* 120 us half-bit chips, as STEP_OOK. */
+    const SPC_OOK = FS * 120e-6;
+    /* Samples without an edge that end a burst, as GAP_OOK. */
+    const OOK_GAP = 24;
+    const OOK_MODELS = ['SCHRADER', 'EG53', 'BMW', 'NISSAN', 'OOK'];
+    /* Runs this short (under half a 4.6-sample chip) are slicer chatter, not chips. */
+    const OOK_GLITCH = 2;
+    /* No TPMS OOK frame is longer: an EG53 is 241 chips. Longer is noise. */
+    const OOK_MAX_CHIPS = 300;
+
+    /** Whole PSI from tenths of a kPa, as dectpms psi_from_kpa10, kept to one decimal. */
+    function psiFromKpa(kpa) {
+        return (kpa / 6.895).toFixed(1);
+    }
+
+    /** Schrader MRXGG4: CRC-8 0x07 / 0xF0 over 7 bytes. */
+    function parseSchrader(b) {
+        if (crc8(b.subarray(0, 7), 0x07, 0xF0) !== b[7]) return null;
+        const id = (((b[1] & 0x0F) << 24) | (b[2] << 16) | (b[3] << 8) | b[4]) >>> 0;
+        return `id ${id.toString(16).toUpperCase().padStart(7, '0')}  ${psiFromKpa(b[5] * 2.5)} PSI  ` +
+               `${b[6] - 50} C`;
+    }
+
+    /** Schrader EG53: byte sum of 9 bytes, Fahrenheit. */
+    function parseEg53(b) {
+        if (!b[1] && !b[2] && !b[4] && !b[5] && !b[7] && !b[8]) return null;
+        let sum = 0;
+        for (let i = 0; i < 9; i++) sum += b[i];
+        if ((sum & 0xFF) !== b[9]) return null;
+        const id = (b[4] << 16) | (b[5] << 8) | b[6];
+        return `id ${id.toString(16).toUpperCase().padStart(6, '0')}  ${psiFromKpa(b[7] * 2.5)} PSI  ` +
+               `${Math.trunc(((b[8] - 32) * 5) / 9)} C`;
+    }
+
+    /** BMW / Mini: two check bits and range limits. */
+    function parseBmw(b) {
+        const serial = ((b[0] & 0x1F) << 19) | (b[1] << 11) | (b[2] << 3) | (b[3] >> 5);
+        if (serial === 0 || serial === 0x00FFFFFF) return null;
+        let even = 0;
+        let n = 0;
+        for (let i = 3; i < 38; i++) {
+            if ((b[i >> 3] >> (7 - (i & 7))) & 1) {
+                n++;
+                if (((i - 3) & 1) === 0) even++;
+            }
+        }
+        const c1c2 = (even + 2 * n - 1) & 3;
+        if (c1c2 !== ((((b[4] >> 3) & 1) << 1) | ((b[4] >> 2) & 1))) return null;
+        const pressure = ((b[3] & 0x1F) << 4) | (b[4] >> 4);
+        const temp = ((b[4] & 0x03) << 5) | (b[5] >> 3);
+        if (pressure > 450 || temp - 50 < -40 || temp - 50 > 85) return null;
+        return `id ${serial.toString(16).toUpperCase().padStart(6, '0')}  ${psiFromKpa(pressure)} PSI  ` +
+               `${temp - 50} C`;
+    }
+
+    /** Nissan / Subaru: 2-bit sum, PSI is raw / 4, no temperature. */
+    function parseNissan(b) {
+        if (!b[0] && !b[1] && !b[2] && !b[3]) return null;
+        let sum = 0;
+        for (let i = 0; i < 5; i++) {
+            sum += (b[i] & 3) + ((b[i] >> 2) & 3) + ((b[i] >> 4) & 3) + ((b[i] >> 6) & 3);
+        }
+        if ((sum & 3) !== 1) return null;
+        const id = ((b[0] & 0x0F) << 20) | (b[1] << 12) | (b[2] << 4) | (b[3] >> 4);
+        const pressure = ((b[3] & 0x0F) << 4) | (b[4] >> 4);
+        return `id ${id.toString(16).toUpperCase().padStart(6, '0')}  ${(pressure / 4).toFixed(1)} PSI`;
+    }
+
+    /**
+     * Manchester as dectpms ook_manchester: chip 0 is the carrier coming on,
+     * the middle of a 0 bit; then on-off is 1, off-on is 0; equal chips end it.
+     */
+    function ookManchester(ch) {
+        if (!ch.length) return [];
+        const on = ch[0];
+        const out = [0];
+        for (let j = 1; j + 1 < ch.length && out.length < 128; j += 2) {
+            if (ch[j] === ch[j + 1]) break;
+            out.push(ch[j] === on ? 1 : 0);
+        }
+        return out;
+    }
+
+    /** Every OOK reading in one burst's chips: [score, model, desc]. */
+    function ookFrames(ch, pol) {
+        const out = [];
+        const m = ookManchester(ch);
+        const n = m.length;
+        const tryFrame = (model, need, bits, parse) => {
+            const b = pack(bits);
+            const txt = parse(b);
+            if (txt) out.push([1000, model, `OK  ${txt} (${pol})`]);
+            else if (!junk(b)) out.push([need, model, `${need}/${need} bits, CHECK FAIL  ${hex(b)} (${pol})`]);
+        };
+        if (n === 68) tryFrame('SCHRADER', 68, m.slice(4, 68), parseSchrader);
+        if (n === 120) tryFrame('EG53', 120, m.slice(40, 120), parseEg53);
+        if (n === 61 && pack(m.slice(0, 16))[0] === 0x7F && pack(m.slice(0, 16))[1] === 0xFF) {
+            tryFrame('BMW', 61, m.slice(16, 61).concat([0, 0, 0]), parseBmw);
+        }
+        /* Nissan and Subaru are PCM: sync 555E in the raw chips, then Manchester.
+           The chips are turned so the carrier is 1 first: dectpms.c searches the
+           raw levels, which only matches one AM polarity. */
+        const nch = ch[0] ? ch : ch.map((c) => c ^ 1);
+        const at = nch.join('').indexOf('0101010101011110');
+        if (at >= 0) {
+            const pos = at + 14;
+            if (pos >= 18 && pos + 76 <= 119 && pos + 76 <= nch.length) {
+                const bits = manDecode(nch, pos, 38, true);
+                if (bits.length >= 38) tryFrame('NISSAN', 38, bits.concat([0, 0]), parseNissan);
+            }
+        }
+        if (!out.length && n >= 8) {
+            out.push([n, 'OOK', `${n} bits, no known length (SCHRADER 68, BMW 61, EG53 120) (${pol})`]);
+        }
+        return out;
+    }
+
+    /** Chips of one OOK burst from run lengths, as rtl_433 times pulses. */
+    function ookRleChips(runs) {
+        const ch = [];
+        for (const [level, len] of runs) {
+            const k = Math.max(1, Math.floor(len / SPC_OOK + 0.5));
+            for (let i = 0; i < k; i++) ch.push(level);
+        }
+        return ch;
+    }
+
+    /** Chips of one OOK burst with the radio's clock: the first sample is an edge. */
+    function ookPllChips(s, from, to) {
+        const step = 14245;
+        const want = 32768 + Math.floor(step / 2);
+        let phase = 0;
+        let half = 2;
+        const ch = [];
+        for (let i = from; i < to; i++) {
+            const level = s[i];
+            if (level !== half) {
+                half = level;
+                phase += Math.floor((want - phase) / 2);
+            }
+            phase += step;
+            if (phase >= 65536) {
+                phase -= 65536;
+                ch.push(level);
+            }
+        }
+        return ch;
+    }
+
+    /**
+     * Find OOK bursts and decode them. A burst starts after a quiet run of
+     * OOK_GAP samples, at the carrier coming on, and ends at the next quiet
+     * run. Returns [sample, model, score, desc, chips] like the FSK decoders.
+     */
+    function decodeOok(raw) {
+        /* Fold chatter into the run before it, so it cannot pass for chips. */
+        const s = raw.slice();
+        for (let i = 1; i < s.length;) {
+            let j = i;
+            while (j < s.length && s[j] === s[i]) j++;
+            if (s[i] !== s[i - 1] && j - i <= OOK_GLITCH && j < s.length) {
+                for (let k = i; k < j; k++) s[k] = s[i - 1];
+            }
+            i = j;
+        }
+        const runs = [];
+        for (let i = 0; i < s.length;) {
+            let j = i;
+            while (j < s.length && s[j] === s[i]) j++;
+            runs.push([s[i], i, j - i]);
+            i = j;
+        }
+        const found = [];
+        for (let r = 1; r < runs.length; r++) {
+            if (runs[r - 1][2] < OOK_GAP || runs[r][2] >= OOK_GAP) continue;
+            let e = r;
+            while (e < runs.length && runs[e][2] < OOK_GAP) e++;
+            if (e >= runs.length) break;   /* still on air at the end of the block */
+            const on = runs[r][0];
+            const pol = on ? '+' : '-';
+            const start = runs[r][1];
+            const end = runs[e][1];
+            if (end - start > OOK_MAX_CHIPS * SPC_OOK) {
+                r = e;
+                continue;
+            }
+            const off = on ^ 1;
+            const rle = ookRleChips(runs.slice(r, e).map(([lv, , len]) => [lv, len])).concat([off, off]);
+            const pll = ookPllChips(s, start, end).concat([off, off]);
+            for (const [clock, ch] of [['rle', rle], ['pll', pll]]) {
+                for (const [score, model, desc] of ookFrames(ch, pol)) {
+                    found.push([start, model, score, `${desc} [${clock}]`, ch.join('').substr(0, 260)]);
+                }
+            }
+            r = e;
+        }
+        return found;
+    }
+
+    /**
+     * Run every decoder for the demod with both chip clocks.
+     * Returns [sample, model, score, desc, chips].
+     */
+    function decodeSamples(samples, isOok) {
+        if (isOok) return decodeOok(samples);
         const found = [];
         for (const [name, spc, fn] of PROTOCOLS) {
             for (const [clock, method] of [['rle', rleChips], ['pll', pllChips]]) {
@@ -600,7 +861,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     /** Keep the best candidate of each burst, whatever its model. */
     function bestPerBurst(cands) {
         const order = {};
-        PROTOCOLS.forEach(([name], i) => { order[name] = i; });
+        PROTOCOLS.map(([name]) => name).concat(OOK_MODELS).forEach((name, i) => { order[name] = i; });
         const out = [];
         let first = -BURST;
         for (const c of cands) {
@@ -628,16 +889,19 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 
     const SENS_NAMES = ['LOW', 'MID', 'HIGH'];
 
-    /** Band, offset, IF preset and SENS from a settings value (byte s, SENS << 8). */
+    /** Band, demod, offset, IF preset and SENS from a settings value (s | SENS << 8 | OOK << 10). */
     function describeSettings(s) {
+        const demod = ((s >> 10) & 1) ? 'OOK' : 'FSK';
         const band = (s & 1) ? '433.92' : '315.00';
         let off = (s >> 3) & 15;
         if (off & 8) off -= 16;
         const ifr = IF_PRESETS[(s >> 1) & 3].toString(16).toUpperCase();
+        const ifName = IF_NAMES[(s >> 1) & 3];
         const sens = SENS_NAMES[(s >> 8) & 3] || '?';
         const offTxt = `${off >= 0 ? '+' : ''}${off * 5}`;
-        return { band, offset: off * 5, ifr, sens,
-                 text: `${band} MHz, offset ${offTxt} kHz, IF ${ifr}, SENS ${sens}` };
+        return { band, demod, offset: off * 5, ifr, ifName, sens,
+                 text: `${band} MHz ${demod}, offset ${offTxt} kHz, IF ${ifName} (${ifr}), ` +
+                       `SENS ${sens}` };
     }
 
     /** Emoji for a burst line: decoded, failed its check, or broke up. */
@@ -670,6 +934,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             this.lastSignal = 0;
             this.hints = [];
             this.radio = null;   /* latest settings record, as it arrived */
+            this.ook = false;        /* demod in the latest settings record */
             this.board = new Map();  /* settings -> time and results at that setting */
             this.setAt = null;       /* sample where the current setting's time started */
         }
@@ -681,11 +946,13 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
                     this.setByte = byte;
                 } else if (this.pendingSet === 1) {
                     this.pendingSet = 0;
-                    const set = this.setByte | ((byte & 3) << 8);
+                    const ook = (byte >> 3) & 1;
+                    const set = this.setByte | ((byte & 3) << 8) | (ook << 10);
                     const light = (byte >> 2) & 1;
+                    this.ook = !!ook;
                     /* Live copy for the settings dashboard, ahead of the decoding. */
                     this.radio = { ...describeSettings(set), s: set, light, raw: this.setByte,
-                                   sensLevel: byte & 3 };
+                                   sensLevel: byte & 3, ook };
                     this.emit({ kind: 'live', time: this.now(), text: '', radio: this.radio });
                     this.event({ kind: 'settings', s: set });
                 } else if (this.pendingHit) {
@@ -843,13 +1110,23 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             if (ok && b.model === 'PMV-107J') {
                 this.hint('pmv', b.at, 'This sensor is a Pacific PMV-107J. TPMS EU / NA cannot ' +
                           'decode it yet: save the capture and send it.');
-            } else if (ok) {
+            } else if (ok && (b.model === 'TOYOTA' || b.model === 'FORD')) {
+                /* The radio decodes only these two; in OOK it decodes nothing. */
                 this.pendingOk.push({ at: b.at, model: b.model });
+            } else if (ok) {
+                /* OOK: decoded on the PC only. */
             } else if (b.desc.includes('FAIL')) {
                 this.hint('crc', b.at, 'Whole frames arrive with a bit error. Press UP or DOWN on ' +
                           'the radio for one 5 kHz offset step each way, then * for the IF presets. ' +
                           'If every setting fails the same way, send the capture: it may be another ' +
                           'sensor format.');
+            } else if (b.model === 'OOK') {
+                this.counts.ook = (this.counts.ook || 0) + 1;
+                if (this.counts.ook >= 2) {
+                    this.hint('ookunknown', b.at, 'OOK bursts arrive but match no known length ' +
+                              '(Schrader 68 bits, BMW 61, GM EG53 120, or the Nissan sync). It may ' +
+                              'be another format: save the capture and send it. Or try FSK with 4.');
+                }
             } else {
                 this.counts.partial = (this.counts.partial || 0) + 1;
                 this.counts.partialBest = Math.max(this.counts.partialBest || 0, b.score);
@@ -867,7 +1144,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             const limit = final ? this.buf.length : this.buf.length - OVERLAP;
             if (limit <= 0) return;
             const shown = [];
-            for (const [start, name, score, desc, chips] of merge(decodeSamples(this.buf))) {
+            for (const [start, name, score, desc, chips] of merge(decodeSamples(this.buf, this.ook))) {
                 const at = this.base + start;
                 if (at < this.done || start >= limit) continue;
                 if (score < this.minBits + (name === 'PMV-107J' ? PMV_EXTRA : 0)) {
@@ -896,7 +1173,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             if (this.done - this.lastSignal > QUIET) {
                 this.hint('quiet', this.done, 'Nothing above noise for 30 s. Wake the sensor next ' +
                           'to the radio, check the band with 2 (433.92 in Europe, 315.00 in ' +
-                          'North America), and try SENS HIGH with 3.');
+                          'North America), try SENS HIGH with 3, and the other demod with 4 ' +
+                          '(FSK for Ford / Toyota, OOK for Schrader / GM / BMW / Nissan).');
             }
             const drop = Math.max(0, limit - LEAD);
             this.buf.splice(0, drop);
@@ -984,6 +1262,62 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
         return chips;
     }
 
+    /** OOK chips as the sensors send them: carrier on, then an on/off pair per bit. */
+    function ookEncode(bits) {
+        const chips = [1];
+        for (let i = 1; i < bits.length; i++) chips.push(bits[i], 1 - bits[i]);
+        return chips;
+    }
+
+    /** Schrader MRXGG4 chips: id 03A38B2, 47.9 PSI, 12 C. badCrc flips a CRC bit. */
+    function schraderChips(badCrc) {
+        const b = new Uint8Array([0xF6, 0x70, 0x3A, 0x38, 0xB2, 132, 62, 0]);
+        b[7] = crc8(b.subarray(0, 7), 0x07, 0xF0) ^ (badCrc ? 1 : 0);
+        return ookEncode([0, 1, 1, 1].concat(unpack(b, 64)));
+    }
+
+    /** BMW / Mini chips: id 100C56, 29.0 PSI, 20 C. */
+    function bmwChips() {
+        const body = [0x02, 0x01, 0x8A, 0xCC, 0x86, 0x30];
+        return ookEncode(unpack([0x7F, 0xFF], 16).concat(unpack(body, 45)));
+    }
+
+    /** Schrader EG53 chips: id ABCDEF, 47.9 PSI, 20 C (68 F). */
+    function eg53Chips() {
+        const b = [0x01, 0x02, 0x03, 0x04, 0xAB, 0xCD, 0xEF, 132, 68, 0];
+        let s = 0;
+        for (let i = 0; i < 9; i++) s += b[i];
+        b[9] = s & 0xFF;
+        return ookEncode(unpack([0x55, 0x55, 0x55, 0x55, 0x55], 40).concat(unpack(b, 80)));
+    }
+
+    /**
+     * Nissan / Subaru raw chips, as the host test builds them: the 36-chip
+     * preamble F5555555E, whose last two chips are the first data bit (always
+     * 1), then each later bit v as v, !v. id 123456, 32 PSI.
+     */
+    function nissanChips() {
+        const b = [0x81, 0x23, 0x45, 0x68, 0];
+        for (let xx = 0; xx < 4; xx++) {
+            b[4] = xx << 2;
+            let sum = 0;
+            for (const v of b) sum += (v & 3) + ((v >> 2) & 3) + ((v >> 4) & 3) + ((v >> 6) & 3);
+            if ((sum & 3) === 1) break;
+        }
+        const chips = unpack([0xF5, 0x55, 0x55, 0x55, 0xE0], 36);
+        for (const v of unpack(b, 38).slice(1)) chips.push(v, 1 - v);
+        return chips;
+    }
+
+    /** OOK chips as slicer samples, with quiet (carrier off) before and after. */
+    function ookToSamples(chips, invert) {
+        const off = invert ? 1 : 0;
+        const out = new Array(200).fill(off);
+        const n = Math.floor(chips.length * SPC_OOK);
+        for (let i = 0; i < n; i++) out.push(chips[Math.floor(i / SPC_OOK)] ^ off);
+        return out.concat(new Array(200).fill(off));
+    }
+
     /** Slicer noise from a fixed seed. */
     function noiseMaker(seed) {
         return (n) => Array.from({ length: n }, () => {
@@ -1018,7 +1352,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     /* PC to radio: CMD_SYNC, c, c ^ 0xFF. c is a field (high nibble) and a value. */
     const CMD_SYNC = 0xA5;
     const CMD = { band: 0x10, ifp: 0x20, offset: 0x30, sens: 0x40, light: 0x50, clear: 0x60,
-                  report: 0x70 };
+                  report: 0x70, demod: 0x80 };
 
     /** Bytes of one command for TPMS CAP. */
     function command(field, value) {
@@ -1027,9 +1361,10 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     }
 
     const api = { FS, BAUD, MARK_GAP, MARK_SET, MARK_HIT, SPC_52, SPC_100, Stream, selftest,
-                  command, CMD, IF_PRESETS,
+                  command, CMD, IF_PRESETS, IF_NAMES,
                   decodeSamples, merge, crc8, dmanDecode, manDecode, toStream, chipsToSamples,
-                  toyotaChips, pmvChips, fordChips, noiseMaker, describeSettings };
+                  toyotaChips, pmvChips, fordChips, noiseMaker, describeSettings,
+                  SPC_OOK, schraderChips, bmwChips, eg53Chips, nissanChips, ookToSamples };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.KPlug = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1038,7 +1373,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
-const MODELS = ['TOYOTA', 'PMV-107J', 'FORD'];
+const MODELS = ['TOYOTA', 'PMV-107J', 'FORD', 'SCHRADER', 'EG53', 'BMW', 'NISSAN', 'OOK'];
 const MAX_LINES = 5000;
 
 let port = null;
@@ -1146,14 +1481,21 @@ function setSeg(id, value) {
 function liveValue(field) {
   if (!live) return null;
   return { band: live.raw & 1, ifp: (live.raw >> 1) & 3, offset: (live.raw >> 3) & 15,
-           sens: live.sensLevel, light: live.light }[field];
+           sens: live.sensLevel, light: live.light, demod: live.ook }[field];
 }
 
 function renderDash() {
   const r = live;
   $('dBand').textContent = r ? r.band : '–';
+  $('dDemod').textContent = r ? r.demod : '–';
   $('dOff').textContent = r ? `${r.offset >= 0 ? '+' : ''}${r.offset} kHz` : '–';
-  $('dIf').textContent = r ? r.ifr : '–';
+  $('dIf').textContent = r ? r.ifName : '–';
+  $('dIfCode').textContent = r ? `IF ${r.ifr}${r.ifr === '7E2C' ? ' · default' : ''}` : 'IF';
+  $('ifNote').innerHTML = '<b>Default: 25 kHz (7E2C)</b>, as every list app uses. ' +
+    'Bandwidth: 25 kHz catches sensors that sit off frequency; 12.5 kHz ' +
+    'lets in less noise. <b>alt</b> flips the gain bit (a 6 dB step) after the FM demod' +
+    (r && r.ook ? ': in OOK (AM) it probably changes nothing, so 25 kHz and 25 kHz alt ' +
+     'should rank the same.' : '.');
   $('dSens').textContent = r ? r.sens : '–';
   $('dLight').textContent = r ? (r.light ? 'On' : 'Timed') : '–';
   if (!sliderDrag) {
@@ -1161,11 +1503,13 @@ function renderDash() {
     $('offSlider').value = r ? String(r.offset / 5) : '0';
   }
   setSeg('cBand', r ? r.raw & 1 : null);
+  setSeg('cDemod', r ? r.ook : null);
   setSeg('cIf', r ? (r.raw >> 1) & 3 : null);
   setSeg('cSens', r ? r.sensLevel : null);
   setSeg('cLight', r ? r.light : null);
   const can = !!(writer && live);
-  for (const b of document.querySelectorAll('#cBand button, #cIf button, #cSens button, ' +
+  for (const b of document.querySelectorAll('#cBand button, #cDemod button, #cIf button, ' +
+                                           '#cSens button, ' +
                                            '#cLight button, #offDown, #offUp, #offZero, ' +
                                            '#offSlider, #cClear, #cReport, #swStart, ' +
                                            '#boardBody button')) {
@@ -1212,17 +1556,18 @@ async function sendNow(field, value, el) {
 
 /** True when the radio reports every field of a setting. */
 function matches(c) {
-  return !!live && ['band', 'ifp', 'offset', 'sens'].every((f) => liveValue(f) === c[f]);
+  return !!live && ['band', 'demod', 'ifp', 'offset', 'sens'].every((f) => liveValue(f) === c[f]);
 }
 
 /** A leaderboard row or sweep step as command values. */
 function comboOf(r) {
-  return { band: r.s & 1, ifp: (r.s >> 1) & 3, offset: (r.s >> 3) & 15, sens: (r.s >> 8) & 3 };
+  return { band: r.s & 1, ifp: (r.s >> 1) & 3, offset: (r.s >> 3) & 15, sens: (r.s >> 8) & 3,
+           demod: (r.s >> 10) & 1 };
 }
 
 /** Send only the fields that differ from what the radio reports. */
 async function applyCombo(c) {
-  for (const f of ['band', 'ifp', 'offset', 'sens']) {
+  for (const f of ['band', 'demod', 'ifp', 'offset', 'sens']) {
     if (liveValue(f) !== c[f]) await send(f, c[f], null);
   }
 }
@@ -1249,13 +1594,33 @@ function renderBoard() {
     const left = r.ranked ? '' : ` <span title="time still needed">(${Math.ceil(minSec - r.seconds)} s more)</span>`;
     const cls = [r.current ? 'cur' : '', r.ranked ? '' : 'short'].join(' ').trim();
     return `<tr class="${cls}"><td class="rank">${n}</td>` +
-           `<td>${kHz(r.offset)} · ${r.ifr} · ${r.sens} <span class="hint">${r.band}</span></td>` +
+           `<td>${kHz(r.offset)} · <span title="IF ${r.ifr}">${r.ifName}</span> · ${r.sens} ` +
+           `<span class="hint">${r.band} ` +
+           `${r.demod}</span></td>` +
            `<td class="num">${Math.round(r.seconds)} s${left}</td>` +
            `<td class="num">${per(r.okRate)}</td><td class="num">${per(r.failRate)}</td>` +
            `<td class="num">${per(r.partialRate)}</td><td class="num">${best}</td>` +
            `<td>${r.current ? '◀ now' : `<button data-s="${r.s}">Use</button>`}</td></tr>`;
   }).join('');
   for (const b of $('boardBody').querySelectorAll('button')) b.disabled = !(writer && live);
+}
+
+/** Steps and time the sweep boxes describe, shown before it starts. */
+function sweepPlan() {
+  const a = Number($('swFrom').value);
+  const b = Number($('swTo').value);
+  const offs = Math.abs(a - b) + 1;
+  const ifs = $('swIf').checked ? 4 : 1;
+  const sens = $('swSens').checked ? 3 : 1;
+  const dem = $('swDemod').checked ? 2 : 1;
+  const dwell = Math.min(600, Math.max(5, parseInt($('swDwell').value, 10) || 30));
+  const steps = offs * ifs * sens * dem;
+  const sec = steps * dwell;
+  const t = sec >= 3600 ? `${(sec / 3600).toFixed(1)} h` : `${Math.ceil(sec / 60)} min`;
+  const parts = [`${dem} demod${dem > 1 ? 's' : ''}`, `${offs} offset${offs > 1 ? 's' : ''}`,
+                 `${ifs} IF`, `${sens} SENS`].join(' × ');
+  $('swPlan').textContent = `Plan: ${parts} = ${steps} step${steps > 1 ? 's' : ''} × ${dwell} s ` +
+    `≈ ${t}.` + (dwell < 15 ? ' Short steps only work with a trigger tool firing every few seconds.' : '');
 }
 
 async function runSweep() {
@@ -1269,10 +1634,17 @@ async function runSweep() {
   const senses = $('swSens').checked ? [0, 1, 2] : [liveValue('sens')];
   const dwell = Math.min(600, Math.max(5, parseInt($('swDwell').value, 10) || 30));
   const band = liveValue('band');
+  /* The current demod first, so a single-demod sweep starts without a switch. */
+  const now = liveValue('demod');
+  const demods = $('swDemod').checked ? [now, now ^ 1] : [now];
   const steps = [];
-  for (const ifp of ifs) {
-    for (const sens of senses) {
-      for (let o = Math.min(a, b); o <= Math.max(a, b); o++) steps.push({ band, ifp, sens, offset: o & 15 });
+  for (const demod of demods) {
+    for (const ifp of ifs) {
+      for (const sens of senses) {
+        for (let o = Math.min(a, b); o <= Math.max(a, b); o++) {
+          steps.push({ band, demod, ifp, sens, offset: o & 15 });
+        }
+      }
     }
   }
   const total = steps.length * dwell;
@@ -1295,7 +1667,8 @@ async function runSweep() {
     while (sweeping && performance.now() - t0 < dwell * 1000) {
       const left = Math.ceil(dwell - (performance.now() - t0) / 1000);
       $('swInfo').textContent = `${k + 1} / ${steps.length}: ${KPlug.describeSettings(
-        c.band | (c.ifp << 1) | (c.offset << 3) | (c.sens << 8)).text}, ${left} s left.`;
+        c.band | (c.ifp << 1) | (c.offset << 3) | (c.sens << 8) | (c.demod << 10)).text}, ` +
+        `${left} s left.`;
       await sleep(250);
     }
   }
@@ -1534,6 +1907,7 @@ if (navigator.serial) {
        true);
 }
 bindSeg('cBand', 'band');
+bindSeg('cDemod', 'demod');
 bindSeg('cIf', 'ifp');
 bindSeg('cSens', 'sens');
 bindSeg('cLight', 'light');
@@ -1563,6 +1937,11 @@ for (const id of ['swFrom', 'swTo']) {
 $('swFrom').value = '-4';
 $('swTo').value = '4';
 $('swStart').addEventListener('click', runSweep);
+for (const id of ['swFrom', 'swTo', 'swIf', 'swSens', 'swDemod', 'swDwell']) {
+  $(id).addEventListener('input', sweepPlan);
+  $(id).addEventListener('change', sweepPlan);
+}
+sweepPlan();
 $('swStop').addEventListener('click', () => { sweeping = false; });
 $('boardReset').addEventListener('click', () => {
   if (!stream) return;

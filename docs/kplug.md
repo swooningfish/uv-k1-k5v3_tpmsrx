@@ -1,19 +1,24 @@
 # TPMS CAP and the K-plug decoder
 
 `TPMS CAP` lets a PC see every burst the radio hears, bit by bit. Use it when
-`TPMS EU` / `TPMS NA` stay empty for a sensor that should decode, Toyota in
-particular.
+a list app stays empty for a sensor that should decode, Toyota in particular.
 
-The radio parks and slices exactly like `TPMS EU` / `TPMS NA`: same band,
-tuning offset, IF presets, SENS levels and slicer. Instead of decoding on the radio, it
+The radio parks and slices exactly like the list apps: same band, tuning
+offset, IF presets, SENS levels and slicer, with the FSK audio of
+`TPMS EU` / `TPMS NA` or the OOK (AM) audio of `TPMS EU2` / `TPMS NA2` (key
+`4`). Instead of decoding on the radio, it
 sends every sliced audio sample out of the K-plug, the two-pin audio
 connector the programming cable plugs into, the one UV Studio uses. On the
 PC, the browser page `tools/kplug.html` reads the cable and runs the rtl_433
 decoders:
 
-- **Toyota** (Pacific PMV-C210): the format `TPMS EU` / `TPMS NA` decode.
-- **PMV-107J** (Pacific, many US Toyotas at 315 MHz): not decoded on the radio.
-- **Ford**.
+| Demod | Sensors |
+|---|---|
+| FSK | **Toyota** (Pacific PMV-C210), as `TPMS EU` / `TPMS NA`; **PMV-107J** (Pacific, many US Toyotas at 315 MHz), which no radio app decodes; **Ford** |
+| OOK | **Schrader MRXGG4**, **GM EG53**, **BMW / Mini** and **Nissan / Subaru**, as `TPMS EU2` / `TPMS NA2` |
+
+Only the FSK decoders fit on the radio, so in OOK the decoding is all on the
+PC: no 📻 "radio decoded" lines, and no hint about frames the radio missed.
 
 For each burst you get how many bits decoded, whether the CRC passed, and the
 id, pressure and temperature when it checks out. That shows whether the radio
@@ -40,12 +45,14 @@ settings, lets you change them from the PC, and gives hints on what to change.
 4. Open `tools/kplug.html` in Chrome or Edge (double-click it; it is one
    self-contained file and needs no server or internet).
 5. Press **Connect** and pick the cable's port.
-6. Wake the sensor next to the radio. Each burst appears in the log as it is
+6. Pick the demod for the sensor: **FSK** for Ford and Toyota, **OOK** for
+   Schrader, GM, BMW / Mini and Nissan / Subaru (key `4`, or the card).
+7. Wake the sensor next to the radio. Each burst appears in the log as it is
    decoded. Click a burst to see its raw chips.
-7. Follow the **💡 What to try** box, waking the sensor after each change.
+8. Follow the **💡 What to try** box, waking the sensor after each change.
    Change the settings on the radio's keys or in the **📻 Radio settings**
    card.
-8. Press **Save capture** and **Save log**, and send both back for debugging.
+9. Press **Save capture** and **Save log**, and send both back for debugging.
    **Open capture…** replays a saved capture in the page.
 
 The page shows the data rate (about 5.5 KB/s while `TPMS CAP` runs), the
@@ -55,15 +62,16 @@ rate is wrong for the baud rate. **Run self-test** checks the decoders.
 
 ## Radio settings card
 
-The card shows the band, tuning offset, IF preset, SENS level and backlight
+The card shows the band, demod, tuning offset, IF preset, SENS level and backlight
 the radio last reported (it sends them every 2 s and after each change), and
 has a control for each:
 
 | Control | Does the same as |
 |---|---|
 | Band `315.00` / `433.92` | Key `2` |
+| Demod `FSK` / `OOK` | Key `4` |
 | Offset slider, `−5` / `+5` / `0` | `DOWN` / `UP`. The slider moves in 5 kHz steps from −40 to +35 kHz and sends when you let go; `0` goes back to the band centre |
-| IF `7E2C` `7E28` `7E0C` `7E08` | `*` |
+| IF `25 kHz` (`7E2C`), `25 kHz alt` (`7E28`), `12.5 kHz` (`7E0C`), `12.5 kHz alt` (`7E08`) | `*` |
 | Sens `LOW` / `MID` / `HIGH` | `3` |
 | Light `Timed` / `On` | `0` |
 | Clear radio counters | `5` |
@@ -75,9 +83,25 @@ within 3 s, the log says so: an older `TPMS CAP` build only sends. The
 controls work only while connected; a replayed capture shows the settings it
 holds, read-only.
 
+The IF presets are two settings of the BK4819's `REG_43`. The default is
+**25 kHz (`7E2C`)**, the value every list app uses; the page marks it on the
+button and on the IF tile.
+
+| Preset | Code | Bandwidth | Gain bit |
+|---|---|---|---|
+| 25 kHz (**default**) | `7E2C` | 25 kHz: catches sensors that sit off frequency, as OOK sensors often do | As every list app uses it |
+| 25 kHz alt | `7E28` | 25 kHz | Flipped: a 6 dB step in the gain after the FM demod |
+| 12.5 kHz | `7E0C` | 12.5 kHz: narrower, so less noise, if the sensor is on frequency | As every list app uses it |
+| 12.5 kHz alt | `7E08` | 12.5 kHz | Flipped |
+
+The gain bit acts after the FM demod, so in OOK (AM) it probably changes
+nothing: expect `25 kHz` and `25 kHz alt` to rank the same there. The card
+says so while the radio is in OOK. The radio's own screen still shows the
+code (`IF7E2C`).
+
 ## Leaderboard
 
-The **🏆 Leaderboard** lists every setting (band, offset, IF preset and SENS)
+The **🏆 Leaderboard** lists every setting (band, demod, offset, IF preset and SENS)
 the radio has been on, with the time spent there and what the bursts did:
 
 | Column | Meaning |
@@ -103,17 +127,56 @@ keep waking the sensor while you test, or use the auto sweep.
 **🔁 Auto sweep**, under the radio settings, gives every setting the same time:
 
 1. Pick the offset range, and tick **all 4 presets** and **all 3 levels** to
-   sweep IF and SENS too. Otherwise those stay as they are.
-2. Set the time per setting (30 s by default).
+   sweep IF and SENS too, and **both FSK and OOK** to run every step in each
+   demod (the current one first). Otherwise those stay as they are. Sweeping
+   both demods finds the sensor's type too: only one of them decodes it.
+2. Set the time per setting (30 s by default). The **Plan** line under the
+   boxes shows the steps and the total time, for example
+   `Plan: 1 demod × 9 offsets × 1 IF × 1 SENS = 9 steps × 30 s ≈ 5 min`.
 3. Press **Start sweep** and keep waking the sensor all through. A TPMS tool
-   on repeat works best.
+   on repeat works best. See [How often sensors transmit](#how-often-sensors-transmit).
 
 The page steps the radio through each setting, waits for the radio to confirm
 it, and shows the step and the time left. **Rank after** is lowered to match
 the step time so every step is ranked. At the end, the best setting is named
 in the log; press **Use** on its leaderboard row to keep it. **Stop** ends the
-sweep early. With every box ticked, 16 offsets × 4 presets × 3 levels is 192
-steps, so narrow the range first.
+sweep early. With every box ticked, 2 demods × 16 offsets × 4 presets × 3
+levels is 384 steps, so narrow the range first.
+
+### Sweep sizes
+
+| Sweep | Steps | At 30 s a step |
+|---|---|---|
+| ±20 kHz (the default range), one demod, IF and SENS as they are | 9 | about 5 min |
+| ±20 kHz, all 4 IF presets | 36 | about 18 min |
+| ±20 kHz, both demods | 18 | about 9 min |
+| Full −40 to +35 kHz, one demod | 16 | about 8 min |
+| Everything ticked, full range | 384 | about 3.2 h |
+
+Start narrow (offset only, around 0 kHz), then sweep IF and SENS at the best
+offset. A 10–15 s step is enough when a trigger tool fires every few seconds.
+
+## How often sensors transmit
+
+The sweep and the leaderboard can only count bursts the sensor sends. Typical
+behaviour, which varies by maker:
+
+| Sensor state | Typical transmissions |
+|---|---|
+| Parked | Asleep: very rarely or not at all. rtl_433's notes on the Ford sensor: once after stopping, then about every 6 hours |
+| Driving (motion detected, usually over about 20–25 km/h) | About once a minute, each a short burst of a few repeated frames (Ford about 4; the PMV-107J counts 1, 2, 3) |
+| Fast pressure change (air let out quickly) | Straight away, then every few seconds while the pressure keeps changing (the PMV-107J sets a rapid-change flag) |
+| TPMS trigger tool (125 kHz) | Straight away, a burst of frames (Ford sends 12 in learn mode) |
+
+So for testing:
+
+- On a parked car, do not wait: trigger the sensor with a tool, or let a
+  little air out in short bursts.
+- In a sweep, keep triggering all through, and make each step longer than the
+  gap between triggers so every step gets several bursts. A step with no
+  trigger records nothing, whatever the setting.
+- Driving gives one burst a minute per wheel: too slow for a sweep, but fine
+  to check that a setting you found keeps decoding.
 
 ## The radio screen
 
@@ -121,12 +184,13 @@ steps, so narrow the range first.
 |---|---|
 | `K-PLUG 115200: KPLUG.HTML` | Streaming, for `tools/kplug.html`. `NO K-PLUG UART` means this firmware has no K-plug UART set up, and nothing is sent |
 | `0K IF7E2C SENS MID` | Tuning offset, IF preset and sensitivity, as on `TPMS EU` / `TPMS NA` |
-| `TOYT 40/72 HITS 3` | The radio's own Toyota decode counter, and the packets the radio decoded itself |
+| `TOYT 40/72 HITS 3` | The radio's own Toyota decode counter, and the packets the radio decoded itself (FSK only) |
 | `SENT 120KB GAPS 9` | Bytes sent, and pauses in sampling (one per screen redraw) |
 
 | Key | Action |
 |---|---|
 | `2` | Switch between 315.00 and 433.92 MHz |
+| `4` | FSK (Ford, Toyota) or OOK (Schrader, GM, BMW / Mini, Nissan / Subaru). The status line shows `FSK` or `OOK` |
 | `*` | Next IF preset (`7E2C`, `7E28`, `7E0C`, `7E08`) |
 | `3` | Sensitivity `LOW` / `MID` / `HIGH` (default `MID`), the same levels as `SENS` in the `TPMS EU` menu. `HIGH` hears weaker, more distant sensors; `LOW` ignores more noise |
 | `UP` / `DOWN` | Tuning offset 5 kHz up or down (`RIGHT` / `LEFT` on the UV-K1) |
@@ -135,19 +199,23 @@ steps, so narrow the range first.
 | `5` | Clear the counters |
 | `EXIT` | Quit. The K-plug goes back to 38400 baud |
 
-Band, preset, offset, SENS and the backlight option are saved on exit. They are separate from the
+Band, demod, preset, offset, SENS and the backlight option are saved on exit. They are separate from the
 `TPMS EU` / `TPMS NA` settings.
 
 ## Reading the log
 
 ```
-[    0.00s] ⚙️ radio: 433.92 MHz, offset +0 kHz, IF 7E2C, SENS MID
+[    0.00s] ⚙️ radio: 433.92 MHz FSK, offset +0 kHz, IF 25 kHz (7E2C), SENS MID
 [   12.41s] ✅ TOYOTA   OK  id 00F211A9  28.0 PSI  1 C (+) [pll]
 [   12.41s] 📻 radio decoded TOYOTA
 [   31.07s] 🟠 TOYOTA   52/72 bits (-) [rle]
 [   44.90s] ❌ TOYOTA   72/72 bits, CRC FAIL  00F211A9468C80E3C7 (+) [rle]
 [   44.90s] 💡 Whole frames arrive with a bit error. Press UP or DOWN on the radio …
 [   58.12s] ✅ PMV-107J OK  id 0ABCDEF5  32.0 PSI  25 C (+) [rle]
+[   61.30s] ⚙️ radio: 433.92 MHz OOK, offset +0 kHz, IF 25 kHz (7E2C), SENS MID
+[   70.05s] ✅ SCHRADER OK  id 03A38B2  47.9 PSI  12 C (+) [rle]
+[   81.77s] ❌ SCHRADER 68/68 bits, CHECK FAIL  F6703A38B2843EE8 (+) [rle]
+[   92.40s] 🟠 OOK      66 bits, no known length (SCHRADER 68, BMW 61, EG53 120) (+) [rle]
 ```
 
 - The time is stream time: seconds of samples received, pauses not counted.
@@ -159,10 +227,15 @@ Band, preset, offset, SENS and the backlight option are saved on exit. They are 
   only looks like this format. The hex is the decoded frame. A frame of
   almost all 0 or all 1 bits is a stuck slicer, not a sensor, and is not
   shown.
-- ⚙️ lines are the radio's band, offset, IF preset and SENS level, shown when
-  they change.
+- ⚙️ lines are the radio's band, demod, offset, IF preset and SENS level,
+  shown when they change.
+- OOK frames have no sync to count from, so they are told apart by length:
+  Schrader 68 bits, BMW 61 (after a `7FFF` sync), GM EG53 120, and Nissan by
+  its `555E` sync. A burst of another length shows as 🟠 `OOK … no known
+  length`.
 - 📻 lines are packets the radio's own decoder accepted.
-- `(+)` / `(-)` is the discriminator polarity the sync was found in.
+- `(+)` / `(-)` is the polarity: of the FSK discriminator, or for OOK whether
+  the carrier showed as 1 or as 0.
 - Only the best match of each burst is shown: a short sync of one format often
   turns up inside another format's frame.
 - `[pll]` used the radio's bit clock; `[rle]` timed each run of samples, as
@@ -173,8 +246,8 @@ Band, preset, offset, SENS and the backlight option are saved on exit. They are 
 
 The page watches the bursts and puts a 💡 line in the log, and in the
 **What to try** box, when it sees something to change. Each hint is given
-once, and again after a retune (band, offset, preset or SENS) if it still
-applies.
+once, and again after a retune (band, demod, offset, preset or SENS) if it
+still applies.
 
 | 💡 Hint | When | What to do |
 |---|---|---|
@@ -183,7 +256,8 @@ applies.
 | Best so far | After a retune, when the best setting changes | The setting that gave the best single result so far. Go back to it if nothing beats it; the leaderboard ranks them all |
 | The PC decoded a frame the radio did not | A ✅ Toyota or Ford with no 📻 within half a second | The radio's bit clock is the weak spot. Send the capture |
 | This sensor is a Pacific PMV-107J | A ✅ PMV-107J | The radio apps cannot decode it yet. Send the capture |
-| Nothing above noise for 30 s | 30 s of stream with no burst | Wake the sensor next to the radio, check the band with `2`, and try SENS `HIGH` with `3` |
+| OOK bursts match no known length | Two OOK bursts of another length | It may be another format: send the capture. Or try FSK with `4` |
+| Nothing above noise for 30 s | 30 s of stream with no burst | Wake the sensor next to the radio, check the band with `2`, try SENS `HIGH` with `3` and the other demod with `4` |
 
 ## How it works
 
@@ -199,8 +273,8 @@ Bytes on the wire:
 |---|---|
 | `0xxxxxxx` | Seven sliced samples, oldest in bit 6 |
 | `0x80` | Gap: sampling paused |
-| `0x81 s v` | Settings: `s` bit 0 band (1 is 433.92), bits 2:1 IF preset, bits 6:3 offset in 5 kHz steps (two's complement); `v` bits 1:0 the SENS level (0 `LOW`, 1 `MID`, 2 `HIGH`), bit 2 the forced backlight |
-| `0x82 m` | The radio decoded a packet of model `m` (0 Ford, 1 Toyota) |
+| `0x81 s v` | Settings: `s` bit 0 band (1 is 433.92), bits 2:1 IF preset, bits 6:3 offset in 5 kHz steps (two's complement); `v` bits 1:0 the SENS level (0 `LOW`, 1 `MID`, 2 `HIGH`), bit 2 the forced backlight, bit 3 the demod (1 is OOK) |
+| `0x82 m` | The radio decoded a packet of model `m` (0 Ford, 1 Toyota; FSK only) |
 
 Bytes from the PC are commands: `0xA5`, `c`, `c ^ 0xFF`. The inverted copy
 keeps line noise from changing a setting. `c` holds a field in its high
@@ -215,6 +289,7 @@ nibble and a value in its low one:
 | `0x5v` | Forced backlight 0 or 1 |
 | `0x60` | Clear the radio's counters |
 | `0x70` | Send the settings record now |
+| `0x8v` | Demod (`v` 1 is OOK) |
 
 The app interface reserves the K-plug port for apps but does not implement it
 yet, so `TPMS CAP` uses the K-plug UART (USART1) directly. The resident

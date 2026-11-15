@@ -52,7 +52,7 @@ bytes.push(K.MARK_GAP);
 
 const hex = (a) => Array.from(a, (x) => x.toString(16).toUpperCase().padStart(2, '0')).join(' ');
 for (const [f, v] of [['band', 1], ['ifp', 2], ['offset', 15], ['sens', 2], ['light', 1],
-                      ['clear', 0], ['report', 0]]) {
+                      ['clear', 0], ['report', 0], ['demod', 1]]) {
     console.log(`cmd ${f}=${v}: ${hex(K.command(f, v))}`);
 }
 const show = (ev) => {
@@ -68,6 +68,31 @@ for (const min of [15, 1]) {
         `board${min} ${i + 1}: ${r.band} ${r.offset} ${r.sens} ok=${r.ok} fail=${r.fail} ` +
         `partial=${r.partial} best=${r.best} ranked=${r.ranked} sec=${Math.round(r.seconds)}`));
 }
+
+/* OOK: TPMS CAP on AM audio. Every OOK model in both AM polarities, a bad CRC,
+   then slicer chatter that must not pass for a frame. */
+const ob = [K.MARK_SET, 0x01, 1 | 8];
+const opiece = (smp) => {
+    const pad = (7 - (smp.length % 7)) % 7;
+    for (const b of K.toStream(smp.concat(new Array(pad).fill(smp[smp.length - 1])))) ob.push(b);
+};
+for (const inv of [false, true]) {
+    for (const ch of [K.schraderChips(false), K.schraderChips(true), K.bmwChips(), K.eg53Chips(),
+                      K.nissanChips()]) {
+        opiece(K.ookToSamples(ch, inv));
+        opiece(new Array(3000).fill(inv ? 1 : 0));
+    }
+}
+opiece(K.noiseMaker(5)(3 * K.FS));
+opiece(new Array(3000).fill(0));
+ob.push(K.MARK_GAP);
+const os = new K.Stream(24, (ev) => {
+    if (ev.kind === 'live') console.log(`olive demod=${ev.radio.demod} ook=${ev.radio.ook}`);
+    else console.log('o' + ev.kind + ' ' + ev.text);
+});
+os.feed(ob);
+os.flush();
+console.log('ostats ' + JSON.stringify(os.stats));
 """
 
 # (kind, text the line must contain), in order.
@@ -79,10 +104,11 @@ EXPECT = [
     ("cmd", "cmd light=1: A5 51 AE"),
     ("cmd", "cmd clear=0: A5 60 9F"),
     ("cmd", "cmd report=0: A5 70 8F"),
+    ("cmd", "cmd demod=1: A5 81 7E"),
     # The dashboard feed runs ahead of the decoding, so both records come first.
     ("live", "live 433.92 0 7E2C sens=1 light=0"),
     ("live", "live 433.92 -5 7E2C sens=2 light=1"),
-    ("settings", "⚙️ radio: 433.92 MHz, offset +0 kHz, IF 7E2C, SENS MID"),
+    ("settings", "⚙️ radio: 433.92 MHz FSK, offset +0 kHz, IF 25 kHz (7E2C), SENS MID"),
     ("ok", "✅ TOYOTA   OK  id 00F211A9  28.0 PSI  1 C"),
     ("radio", "📻 radio decoded TOYOTA"),
     ("ok", "✅ TOYOTA   OK  id 00F211A9"),
@@ -92,8 +118,9 @@ EXPECT = [
     ("partial", "🟠 TOYOTA   "),
     ("partial", "🟠 TOYOTA   "),
     ("hint", "💡 Bursts arrive but break up"),
-    ("settings", "⚙️ radio: 433.92 MHz, offset -5 kHz, IF 7E2C, SENS HIGH"),
-    ("hint", "💡 Best so far: 433.92 MHz, offset +0 kHz, IF 7E2C, SENS MID (TOYOTA decoded OK)"),
+    ("settings", "⚙️ radio: 433.92 MHz FSK, offset -5 kHz, IF 25 kHz (7E2C), SENS HIGH"),
+    ("hint", "💡 Best so far: 433.92 MHz FSK, offset +0 kHz, IF 25 kHz (7E2C), SENS MID "
+             "(TOYOTA decoded OK)"),
     ("ok", "✅ PMV-107J OK  id 0ABCDEF5  32.0 PSI  25 C"),
     ("hint", "💡 This sensor is a Pacific PMV-107J"),
     ("hint", "💡 Nothing above noise for 30 s"),
@@ -102,6 +129,21 @@ EXPECT = [
     ("board15", "board15 2: 433.92 0 MID ok=2 fail=1 partial=2 best=100 ranked=false sec=3"),
     ("board1", "board1 1: 433.92 0 MID ok=2"),
     ("board1", "board1 2: 433.92 -5 HIGH ok=1"),
+    # OOK, carrier on as 1 (+) then as 0 (-).
+    ("olive", "olive demod=OOK ook=1"),
+    ("osettings", "⚙️ radio: 433.92 MHz OOK, offset +0 kHz, IF 25 kHz (7E2C), SENS MID"),
+    ("ook", "✅ SCHRADER OK  id 03A38B2  47.9 PSI  12 C (+)"),
+    ("ofail", "❌ SCHRADER 68/68 bits, CHECK FAIL"),
+    ("ook", "✅ BMW      OK  id 100C56  29.0 PSI  20 C (+)"),
+    ("ook", "✅ EG53     OK  id ABCDEF  47.9 PSI  20 C (+)"),
+    ("ook", "✅ NISSAN   OK  id 123456  32.0 PSI (+)"),
+    ("ook", "✅ SCHRADER OK  id 03A38B2  47.9 PSI  12 C (-)"),
+    ("ofail", "❌ SCHRADER 68/68 bits, CHECK FAIL"),
+    ("ook", "✅ BMW      OK  id 100C56  29.0 PSI  20 C (-)"),
+    ("ook", "✅ EG53     OK  id ABCDEF  47.9 PSI  20 C (-)"),
+    ("ook", "✅ NISSAN   OK  id 123456  32.0 PSI (-)"),
+    # No 'missed' hint in OOK (the radio cannot decode OOK), and chatter is no frame.
+    ("ostats", 'ostats {"SCHRADER":[4,2,99],"BMW":[2,2,99],"EG53":[2,2,99],"NISSAN":[2,2,99]}'),
 ]
 
 
@@ -141,6 +183,9 @@ def main() -> int:
     print(f"  {'ok' if ok else 'FAIL'}  kplug.html self-test ({len(selfs)} checks)")
     fails += 0 if ok else 1
     events = [ln for ln in lines if not ln.startswith("SELF ")]
+    if any(ln.startswith("ohint") and "radio did not" in ln for ln in events):
+        print("FAIL  OOK gave the radio-missed hint, but the radio cannot decode OOK")
+        fails += 1
     i = 0
     for kind, text in EXPECT:
         while i < len(events) and not (events[i].startswith(kind + " ") and text in events[i]):

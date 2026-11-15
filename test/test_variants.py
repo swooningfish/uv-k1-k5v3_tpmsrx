@@ -216,7 +216,7 @@ def test_cap_app() -> None:
     gate = "SENS_GATE[SENS_LEVELS] = { 60u, 40u, 28u };"
     check("case APP_KEY_3:" in src and gate in src and gate in rx,
           "3 cycles the same SENS levels as the TPMS EU menu")
-    check("queue((uint8_t)(g.sens | (g.light << 2)));" in src and "this.pendingSet = 2;" in tool,
+    check("g.sens | (g.light << 2)" in src and "this.pendingSet = 2;" in tool,
           "the SENS level and the backlight travel in the settings record")
     check("#define CMD_SYNC       0xA5u" in src and "const CMD_SYNC = 0xA5;" in tool,
           "both ends use the same command sync byte")
@@ -228,6 +228,11 @@ def test_cap_app() -> None:
           "the page and the radio agree on the command fields")
     check("USART1_CR3 = g.cr3 & ~CR3_DMAR;" in src and "USART1_CR3 = g.cr3;" in src,
           "the K-plug receive DMA is handed back on exit")
+    check("case APP_KEY_4:" in src and "if (g.ook) g.A->set_af(APP_AF_AM);" in src
+          and "(g.ook << 3)" in src and "demod: 0x80" in tool and "case 8u:" in src,
+          "4 and command 0x8v switch FSK / OOK; the demod travels in the settings record")
+    check("function decodeOok(" in tool and all(m in tool for m in ("parseSchrader", "parseEg53",
+          "parseBmw", "parseNissan")), "kplug.html decodes every OOK model of TPMS EU2 / NA2")
     check("CMD_GAP_MS" in tool and "sendChain" in tool,
           "the page spaces commands: TPMS CAP holds one until its next key poll")
     check('id="offSlider" type="range" min="-8" max="7" step="1"' in tool,

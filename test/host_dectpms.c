@@ -139,6 +139,59 @@ static void test_schrader(void)
 }
 
 /**
+ * Append the first nbits of a byte buffer to the slicer, MSB first.
+ *
+ * @param d Slicer collecting an OOK burst.
+ * @param b Source bytes.
+ * @param nbits Number of bits to append.
+ */
+static void put_bytes(dectpms_t *d, const uint8_t *b, unsigned nbits)
+{
+    for (unsigned i = 0; i < nbits; i++)
+        put_bit(d, (uint8_t)((b[i >> 3] >> (7u - (i & 7u))) & 1u));
+}
+
+/**
+ * Run whole OOK bursts through the parser chain the EU2 / NA2 apps use.
+ *
+ * Schrader shares the chain with EG53, BMW and Nissan, so a BMW burst
+ * must come out as BMW and a Schrader burst as Schrader.
+ */
+static void test_ook_chain(void)
+{
+    static const uint8_t bmw_sync[2] = {0x7F, 0xFF};
+    static const uint8_t bmw[6] = {0x02, 0x01, 0x8A, 0xCC, 0x86, 0x30};
+    static const uint8_t schr_sync = 0x70; /* sync nibble 7 */
+    uint8_t schr[8] = {0xF6, 0x70, 0x3A, 0x38, 0xB2, 132, 62, 0};
+    dectpms_t d;
+    tpms_pkt_t o;
+
+    /* BMW: 16-bit sync then the 46-bit body, 62 bits in all. */
+    dectpms_init(&d, TPMS_MODE_OOK);
+    put_bytes(&d, bmw_sync, 16);
+    put_bytes(&d, bmw, 46);
+    memset(&o, 0, sizeof o);
+    expect(finish_ook(&d, &o), "ook chain takes a bmw burst");
+    expect(o.model == TPMS_BMW, "ook chain bmw burst is bmw, not schrader");
+
+    /* Schrader: sync nibble then 64 bits, 68 bits in all. */
+    schr[7] = crc8_ref(schr, 7, 0x07u, 0xf0u);
+    dectpms_init(&d, TPMS_MODE_OOK);
+    put_bytes(&d, &schr_sync, 4);
+    put_bytes(&d, schr, 64);
+    memset(&o, 0, sizeof o);
+    expect(finish_ook(&d, &o), "ook chain takes a schrader burst");
+    expect(o.model == TPMS_SCHR && o.id == 0x003A38B2u, "ook chain schrader burst is schrader");
+
+    /* A Schrader burst with a bad CRC must not come out as anything. */
+    schr[7] ^= 1u;
+    dectpms_init(&d, TPMS_MODE_OOK);
+    put_bytes(&d, &schr_sync, 4);
+    put_bytes(&d, schr, 64);
+    expect(!finish_ook(&d, &o), "ook chain drops a bad schrader burst");
+}
+
+/**
  * Check a valid EG53 frame and a broken checksum.
  */
 static void test_eg53(void)
@@ -229,6 +282,7 @@ static void test_conversions(void)
 int main(void)
 {
     fails = 0;
+    test_ook_chain();
     test_ford();
     test_toyota();
     test_schrader();

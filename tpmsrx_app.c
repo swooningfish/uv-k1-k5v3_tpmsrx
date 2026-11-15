@@ -65,29 +65,20 @@ void *memset(void *d, int c, size_t n)
 #define LED_STEP       (FS / 10u)
 #define CFG_MAGIC      0xB2u
 #define ROWS           7u
-#define PREF_FSK       0u
-#define PREF_OOK       1u
-#define PREF_AUTO      2u
-#define AUTO_DWELL_MS  2500u
-#define AUTO_HOLD_MS   10000u
-/* EU2: fixed 433.92 OOK. NA2: OOK only, band still changeable. EU/NA: both free. */
-#if defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
-#define TPMS_LOCK_MODE 1
+/* One demod per app: EU / NA are FSK (Ford, Toyota), EU2 / NA2 are OOK. */
+#if TPMS_HAVE_FSK
+#define TPMS_PATH      TPMS_MODE_FSK
 #else
-#define TPMS_LOCK_MODE 0
+#define TPMS_PATH      TPMS_MODE_OOK
 #endif
+/* EU2: fixed 433.92. The others can change band. */
 #if defined(TPMS_FLAVOUR_EU2)
 #define TPMS_LOCK_BAND 1
 #define MENU_CLR       0u
-#elif defined(TPMS_FLAVOUR_NA2)
-#define TPMS_LOCK_BAND 0
-#define MENU_BAND      0u
-#define MENU_CLR       1u
 #else
 #define TPMS_LOCK_BAND 0
 #define MENU_BAND      0u
-#define MENU_MODE      1u
-#define MENU_CLR       2u
+#define MENU_CLR       1u
 #endif
 #define DISP_OFF       1u
 #define DISP_TMO       2u
@@ -121,17 +112,16 @@ typedef struct {
 
 typedef struct {
     uint8_t band433;
-    uint8_t pref;     /* PREF_FSK / PREF_OOK / PREF_AUTO */
     uint8_t disp;     /* DISP_OFF / DISP_TMO */
 } app_cfg_t;
 
 static struct {
     const app_api_t *A;
-    uint8_t prevKey, led, nRows, drawDue, menu, menuSel, blOff, path, spk;
+    uint8_t prevKey, led, nRows, drawDue, menu, menuSel, blOff, spk;
     uint8_t blTime;   /* radio backlight time: 0 off, BL_ALWAYS on, else timed */
     uint16_t ledCnt, keyCnt;
     int16_t rssi;
-    uint32_t autoAt, lastHit, lastKey;
+    uint32_t lastHit, lastKey;
     app_cfg_t cfg;
     row_t *rows;
 } g;
@@ -263,23 +253,6 @@ static char *putBand(char *o)
 }
 
 /**
- * Status-line demod text for the current preference.
- *
- * AUTO shows A:F or A:O for the path in use.
- * A fixed preference shows FSK or OOK.
- *
- * @param ui Packed UI strings for this flavour.
- * @return Pointer at the label inside ui.
- */
-static const char *modeLabel(const char *ui)
-{
-    if (g.cfg.pref == PREF_AUTO)
-        return ui + (g.path == TPMS_MODE_FSK ? T_AF : T_AO);
-    if (g.cfg.pref == PREF_OOK) return ui + T_OOK;
-    return ui + T_FSK;
-}
-
-/**
  * Terminate a tiny-font string and draw it.
  *
  * @param buf Start of the string.
@@ -307,18 +280,6 @@ static void tinyCenter(char *buf, uint8_t y, char *end)
 }
 
 /**
- * Choose the demod the slicer should run for the saved preference.
- *
- * @return TPMS_MODE_FSK or TPMS_MODE_OOK.
- */
-static uint8_t activePath(void)
-{
-    if (g.cfg.pref == PREF_OOK) return TPMS_MODE_OOK;
-    if (g.cfg.pref == PREF_AUTO) return g.path;
-    return TPMS_MODE_FSK;
-}
-
-/**
  * Select the UHF LNA when REG_33 can be read back.
  *
  * REG_33 is the GPIO word. A write-only register stays on the VFO path.
@@ -343,7 +304,6 @@ static void selectUhfLna(void)
 static void applyRf(void)
 {
     uint32_t f = g.cfg.band433 ? FREQ_433 : FREQ_315;
-    uint8_t path = activePath();
     g.A->bk_write(REG_38, (uint16_t)(f & 0xFFFFu));
     g.A->bk_write(REG_39, (uint16_t)(f >> 16));
     g.A->tones_off_rx();
@@ -353,29 +313,13 @@ static void applyRf(void)
     g.A->bk_write(REG_43, REG_43_WIDE);
     g.A->set_agc(false);
     /* AF last: clears mute from tones_off_rx. FSK = raw bypass; OOK = AM. */
-    if (path == TPMS_MODE_FSK)
-        g.A->bk_write(REG_47, REG_47_BYPASS);
-    else
-        g.A->set_af(APP_AF_AM);
+#if TPMS_HAVE_FSK
+    g.A->bk_write(REG_47, REG_47_BYPASS);
+#else
+    g.A->set_af(APP_AF_AM);
+#endif
     selectUhfLna();
     g.A->audio_path(g.spk != 0u);
-}
-
-/**
- * Switch demod, retune, and clear the slicer.
- *
- * Does nothing when the radio is already on that path.
- *
- * @param path TPMS_MODE_FSK or TPMS_MODE_OOK.
- * @param dec Slicer to reset after the retune.
- */
-static void setPath(uint8_t path, dectpms_t *dec)
-{
-    if (g.path == path) return;
-    g.path = path;
-    applyRf();
-    dectpms_init(dec, path);
-    g.autoAt = g.A->ticks_ms();
 }
 
 /**
@@ -486,7 +430,7 @@ static void drawStatus(const char *ui)
                        (uint8_t)(2u + T_TITLE_CHARS * 4u));
     o = putBand(str);
     *o++ = ' ';
-    o = put(o, modeLabel(ui));
+    o = put(o, ui + T_DEMOD);
     /* Always reserve 8 px for the speaker icon so the band and bulb never shift. */
     *o++ = ' ';
     *o++ = ' ';
@@ -512,12 +456,10 @@ static void drawMenu(const char *ui)
 {
     char str[32]; /* 31-cell help row with the version + NUL */
     char *o;
-#if defined(TPMS_FLAVOUR_EU2)
+#if TPMS_LOCK_BAND
     const uint16_t labels[1] = { T_CLR };
-#elif defined(TPMS_FLAVOUR_NA2)
-    const uint16_t labels[2] = { T_BAND, T_CLR };
 #else
-    const uint16_t labels[3] = { T_BAND, T_MODE, T_CLR };
+    const uint16_t labels[2] = { T_BAND, T_CLR };
 #endif
     for (uint8_t i = 0; i < MENU_ITEMS; i++) {
         o = str;
@@ -527,14 +469,6 @@ static void drawMenu(const char *ui)
         if (i == MENU_BAND) {
             *o++ = ' ';
             o = putBand(o);
-        }
-#endif
-#if !TPMS_LOCK_MODE
-        else if (i == MENU_MODE) {
-            *o++ = ' ';
-            if (g.cfg.pref == PREF_AUTO) o = put(o, ui + T_AUTO);
-            else if (g.cfg.pref == PREF_OOK) o = put(o, ui + T_OOK);
-            else o = put(o, ui + T_FSK);
         }
 #endif
         *o = '\0';
@@ -640,26 +574,6 @@ static void draw(const char *ui)
         drawListHints(ui);
 }
 
-#if !TPMS_LOCK_MODE
-/**
- * Cycle FSK, OOK, and AUTO, then retune.
- *
- * @param dec Slicer to reset on the new path.
- */
-static void cyclePref(dectpms_t *dec)
-{
-    if (g.cfg.pref == PREF_FSK) g.cfg.pref = PREF_OOK;
-    else if (g.cfg.pref == PREF_OOK) g.cfg.pref = PREF_AUTO;
-    else g.cfg.pref = PREF_FSK;
-    if (g.cfg.pref != PREF_AUTO) {
-        g.path = (g.cfg.pref == PREF_OOK) ? TPMS_MODE_OOK : TPMS_MODE_FSK;
-    }
-    applyRf();
-    dectpms_init(dec, activePath());
-    g.autoAt = g.A->ticks_ms();
-}
-#endif
-
 /**
  * Apply the selected menu item.
  *
@@ -672,12 +586,7 @@ static void menuChange(dectpms_t *dec)
         case MENU_BAND:
             g.cfg.band433 ^= 1u;
             applyRf();
-            dectpms_init(dec, activePath());
-            break;
-#endif
-#if !TPMS_LOCK_MODE
-        case MENU_MODE:
-            cyclePref(dec);
+            dectpms_init(dec, TPMS_PATH);
             break;
 #endif
         case MENU_CLR:
@@ -686,7 +595,7 @@ static void menuChange(dectpms_t *dec)
         default:
             break;
     }
-#if TPMS_LOCK_BAND && TPMS_LOCK_MODE
+#if TPMS_LOCK_BAND
     (void)dec;
 #endif
 }
@@ -722,7 +631,7 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             g.menu = 0;
             return false;
         }
-        if (key == APP_KEY_MENU || key == APP_KEY_STAR || key == APP_KEY_2 || key == APP_KEY_5)
+        if (key == APP_KEY_MENU || key == APP_KEY_2 || key == APP_KEY_5)
             menuChange(dec);
         return false;
     }
@@ -742,12 +651,7 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
         case APP_KEY_2:
             g.cfg.band433 ^= 1u;
             applyRf();
-            dectpms_init(dec, activePath());
-            break;
-#endif
-#if !TPMS_LOCK_MODE
-        case APP_KEY_STAR:
-            cyclePref(dec);
+            dectpms_init(dec, TPMS_PATH);
             break;
 #endif
         case APP_KEY_0:
@@ -789,23 +693,6 @@ static bool serviceDisp(void)
 }
 
 /**
- * In AUTO, swap demod after the dwell unless a fresh decode is held.
- *
- * @param dec Slicer to reset when the path changes.
- * @return True when the demod was swapped.
- */
-static bool serviceAuto(dectpms_t *dec)
-{
-    uint32_t now;
-    if (g.cfg.pref != PREF_AUTO) return false;
-    now = g.A->ticks_ms();
-    if ((uint32_t)(now - g.lastHit) < AUTO_HOLD_MS) return false;
-    if ((uint32_t)(now - g.autoAt) < AUTO_DWELL_MS) return false;
-    setPath((uint8_t)(g.path == TPMS_MODE_FSK ? TPMS_MODE_OOK : TPMS_MODE_FSK), dec);
-    return true;
-}
-
-/**
  * Sample audio until EXIT, decoding packets and refreshing the screen.
  *
  * @param ui Packed UI strings for this flavour.
@@ -814,14 +701,13 @@ __attribute__((noinline))
 static void listen(const char *ui)
 {
     dectpms_t dec;
-    dectpms_init(&dec, activePath());
+    dectpms_init(&dec, TPMS_PATH);
     uint32_t (*const clk)(void) = g.A->cycles_48mhz;
     uint16_t (*const sample)(void) = g.A->af_capture_sample;
     uint32_t next = clk();
     bool wantUi = true;
-    g.autoAt = g.A->ticks_ms();
     g.lastHit = 0;
-    g.lastKey = g.autoAt;
+    g.lastKey = g.A->ticks_ms();
 
     for (;;) {
         while ((int32_t)(clk() - next) < 0) {}
@@ -848,7 +734,6 @@ static void listen(const char *ui)
             if (++g.keyCnt < KEY_EVERY) continue;
         }
         g.keyCnt = 0;
-        if (serviceAuto(&dec)) wantUi = true;
         if (serviceDisp()) wantUi = true;
         /* Drawing blocks sampling, so wait out the rest of the burst train. */
         if (g.drawDue && (uint32_t)(g.A->ticks_ms() - g.lastHit) >= DRAW_HOLD_MS) {
@@ -913,13 +798,12 @@ void app_main(const app_api_t *api)
     r43 = api->bk_read(REG_43);
     r2b = api->bk_read(REG_2B);
 
-    /* Defaults per flavour (first launch). Saved band/mode are restored when
-     * present, then lock flags below force OOK / 433.92 where the sensors need it. */
+    /* Defaults per flavour (first launch). The saved band is restored when
+     * present, then EU2 forces 433.92 where its sensors are. Byte 2 held the
+     * old demod choice and is ignored: each app has one demod now. */
     api->cfg_load(cfg, 4);
     if (cfg[0] == CFG_MAGIC || cfg[0] == 0xB1u) {
         g.cfg.band433 = cfg[1] ? 1u : 0u;
-        if (cfg[0] == CFG_MAGIC && cfg[2] <= PREF_AUTO) g.cfg.pref = cfg[2];
-        else g.cfg.pref = cfg[2] ? PREF_OOK : PREF_FSK;
         if (cfg[0] == CFG_MAGIC && cfg[3] == DISP_OFF) g.cfg.disp = DISP_OFF;
     } else {
 #if defined(TPMS_FLAVOUR_NA) || defined(TPMS_FLAVOUR_NA2)
@@ -927,21 +811,12 @@ void app_main(const app_api_t *api)
 #else
         g.cfg.band433 = 1u; /* 433.92 MHz */
 #endif
-#if TPMS_LOCK_MODE
-        g.cfg.pref = PREF_OOK;
-#else
-        g.cfg.pref = PREF_FSK;
-#endif
     }
-#if TPMS_LOCK_MODE
-    g.cfg.pref = PREF_OOK;
-#endif
 #if TPMS_LOCK_BAND
     g.cfg.band433 = 1u;
 #endif
     if (g.cfg.disp == DISP_OFF) g.blOff = 1;
     else api->backlight_on();
-    g.path = (g.cfg.pref == PREF_OOK) ? TPMS_MODE_OOK : TPMS_MODE_FSK;
 
     applyRf();
     api->delay_ms(50);
@@ -957,7 +832,7 @@ void app_main(const app_api_t *api)
 
     cfg[0] = CFG_MAGIC;
     cfg[1] = g.cfg.band433;
-    cfg[2] = g.cfg.pref;
+    cfg[2] = TPMS_PATH;
     cfg[3] = g.cfg.disp;
     api->cfg_save(cfg, 4);
 }

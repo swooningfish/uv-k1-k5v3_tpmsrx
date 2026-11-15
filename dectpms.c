@@ -72,6 +72,7 @@ static uint32_t be32(const uint8_t *b)
 }
 #endif
 
+#if TPMS_HAVE_SCHR || TPMS_HAVE_EG53
 /**
  * Convert pressure in tenths of a kilopascal to whole PSI.
  *
@@ -82,6 +83,7 @@ static int16_t psi_from_kpa10(unsigned kpa10)
 {
     return (int16_t)((kpa10 * 145u + 5000u) / 10000u);
 }
+#endif
 
 #if TPMS_HAVE_FSK
 /**
@@ -542,8 +544,9 @@ static bool finish_nis(dectpms_t *d, tpms_pkt_t *out)
 }
 #endif
 
+#if TPMS_HAVE_OOK
 /**
- * Try each OOK parser this flavour includes, longest frame first.
+ * Try each OOK parser this flavour includes, strictest framing first.
  *
  * @param d Slicer holding the OOK burst.
  * @param out Filled on success.
@@ -555,18 +558,21 @@ static bool finish_ook(dectpms_t *d, tpms_pkt_t *out)
 #if TPMS_HAVE_EG53
     if (n >= 120u && finish_eg53(d, out)) return true;
 #endif
-#if TPMS_HAVE_SCHR
-    if (n >= 68u && finish_schrader(d, out)) return true;
-#endif
 #if TPMS_HAVE_BMW
     if (n >= 61u && n < 120u && finish_bmw(d, out)) return true;
 #endif
 #if TPMS_HAVE_NIS
     if (finish_nis(d, out)) return true;
 #endif
+    /* Schrader goes last: it only has a CRC-8 over the tail of any burst,
+       so the parsers with a sync word or pattern get first claim. */
+#if TPMS_HAVE_SCHR
+    if (n >= 68u && finish_schrader(d, out)) return true;
+#endif
     (void)n;
     return false;
 }
+#endif /* TPMS_HAVE_OOK */
 
 #if TPMS_HAVE_FSK
 /**
@@ -677,8 +683,10 @@ bool dectpms_push(dectpms_t *d, uint16_t sample, tpms_pkt_t *out)
         uint16_t lim = (d->mode == TPMS_MODE_FSK) ? GAP_FSK : GAP_OOK;
         if (d->gap >= lim) {
             bool hit = false;
+#if TPMS_HAVE_OOK
             if (d->mode == TPMS_MODE_OOK)
                 hit = finish_ook(d, out);
+#endif
             dectpms_rearm(d);
             return hit;
         }

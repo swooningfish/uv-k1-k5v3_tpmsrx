@@ -80,7 +80,7 @@ short distance, then:
 
 | You see | Next step |
 |---|---|
-| `N` goes up, list app stays empty | Use the list app for that sensor type, on the same band and demod. If it is still empty, that sensor model is not supported |
+| `N` goes up, list app stays empty | Use the list app for that demod (FSK: `TPMS EU` / `TPMS NA`, OOK: `TPMS EU2` / `TPMS NA2`) on the same band. If it is still empty, that sensor model is not supported |
 | `W` goes up, `N` stays at 0 | Wrong demod or band, or the signal is too weak. Try `*` and `2`, and move closer |
 | `R` and `W` do not move | No signal at the radio. Move closer, check the band and the antenna |
 | `F0` | Audio muted. Quit and relaunch |

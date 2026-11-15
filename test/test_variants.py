@@ -44,14 +44,14 @@ def flavour_ui(flavour: str) -> dict[str, str]:
     # Re-exec the same mapping without importing the SDK Assets class.
     regions = {"eu": "UK/EU", "na": "US/CA", "eu2": "UK/EU", "na2": "US/CA"}
     cars = {
-        "eu": ("FSK: FORD|TOYOTA", "OOK: SCHRADER"),
-        "na": ("FSK: FORD|TOYOTA", "OOK: SCHRADER"),
-        "eu2": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI"),
-        "na2": ("OOK: CHEVROLET|GM", "OOK: SUBARU|NISSAN"),
+        "eu": ("FSK: FORD|TOYOTA", "SCHRADER: USE TPMS EU2"),
+        "na": ("FSK: FORD|TOYOTA", "SCHRADER: USE TPMS NA2"),
+        "eu2": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI|SCHRADER"),
+        "na2": ("OOK: CHEVROLET|GM|SCHRADER", "OOK: SUBARU|NISSAN"),
     }
     hints = {
-        "eu": "2 BAND  * MODE  0 LIGHT",
-        "na": "2 BAND  * MODE  0 LIGHT",
+        "eu": "2 BAND  0 LIGHT",
+        "na": "2 BAND  0 LIGHT",
         "eu2": "0 LIGHT",
         "na2": "2 BAND  0 LIGHT",
     }
@@ -138,13 +138,21 @@ def test_assets_and_flavours() -> None:
         ui = flavour_ui(fl)
         check(ui["hint"] in assets, f"{fl} hint text in gen_assets")
         check(ui["region"] in assets, f"{fl} region in gen_assets")
+        check(ui["cars1"] in assets and ui["cars2"] in assets, f"{fl} car lines in gen_assets")
+        check(len(ui["cars1"]) * 4 <= 128 and len(ui["cars2"]) * 4 <= 128,
+              f"{fl} car lines fit width")
+        # Every app has one demod, so no hint offers a mode key.
+        check("*" not in ui["hint"] and "MODE" not in ui["hint"], f"{fl} hints omit mode")
         # Headline length fits 128 px tiny font (4 px/glyph).
         check(len(ui["listen"]) * 4 <= 128, f"{fl} listening line fits width: {ui['listen']}")
         # Locked flavours must not advertise dead band/mode keys.
         if fl == "eu2":
-            check("*" not in ui["hint"] and "2 BAND" not in ui["hint"], "eu2 hints omit band/mode")
-        if fl == "na2":
-            check("*" not in ui["hint"] and "MODE" not in ui["hint"], "na2 hints omit mode")
+            check("2 BAND" not in ui["hint"], "eu2 hints omit band")
+    check("T_AUTO" not in assets and "T_MODE" not in assets, "no AUTO or MODE strings")
+    hdr = read("dectpms.h")
+    m = re.search(r"TPMS_FLAVOUR_EU2\) \|\| defined\(TPMS_FLAVOUR_NA2\)\n"
+                  r"#define TPMS_HAVE_OOK 1\n#define TPMS_HAVE_SCHR 1", hdr)
+    check(m is not None, "Schrader decodes in the OOK apps (EU2 / NA2)")
 
 
 def test_dbg_app() -> None:

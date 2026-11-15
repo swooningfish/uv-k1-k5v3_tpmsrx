@@ -52,9 +52,9 @@ PY_FILES = (
 MIN_C = {
     "dectpms.c": 28,
     "dectpms.h": 9,
-    "tpmsrx_app.c": 33,
+    "tpmsrx_app.c": 28,
     "tpmsdbg_app.c": 24,
-    "test/host_dectpms.c": 10,
+    "test/host_dectpms.c": 12,
 }
 MIN_PY = {
     "gen_assets.py": 0,

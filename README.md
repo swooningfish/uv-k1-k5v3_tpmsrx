@@ -19,31 +19,36 @@ asset strings. There are no separate regional `.c` trees.
 
 | App | Where | Default band | Default mode | Cars | Signal | Size |
 |---|---|---|---|---|---|---|
-| `TPMS EU` | UK and Europe | 433.92 MHz | FSK | Ford, Toyota, Schrader MRXGG4 | FSK and OOK | 4040 B |
-| `TPMS NA` | United States and Canada | 315 MHz | FSK | Ford, Toyota, Schrader MRXGG4 | FSK and OOK | 4036 B |
-| `TPMS EU2` | UK and Europe | 433.92 MHz (fixed) | OOK (fixed) | Vauxhall, Opel, Saab; BMW and Mini with the Schrader sensor | OOK | 3396 B |
-| `TPMS NA2` | United States and Canada | 315 MHz | OOK (fixed) | Chevrolet and other GM; Subaru; Nissan and Infiniti | OOK | 3584 B |
-| `TPMS DBG` | Either band, no decode | 433.92 MHz | FSK | Records raw bursts | FSK or OOK | 3840 B |
+| `TPMS EU` | UK and Europe | 433.92 MHz | FSK | Ford, Toyota | FSK | 3488 B |
+| `TPMS NA` | United States and Canada | 315 MHz | FSK | Ford, Toyota | FSK | 3488 B |
+| `TPMS EU2` | UK and Europe | 433.92 MHz (fixed) | OOK | Schrader MRXGG4; Vauxhall, Opel, Saab; BMW and Mini with the Schrader sensor | OOK | 3428 B |
+| `TPMS NA2` | United States and Canada | 315 MHz | OOK | Schrader MRXGG4; Chevrolet and other GM; Subaru; Nissan and Infiniti | OOK | 3540 B |
+| `TPMS DBG` | Either band, no decode | 433.92 MHz | FSK | Records raw bursts | FSK or OOK | 3916 B |
+
+Each list app has one demod. `TPMS EU` and `TPMS NA` are the FSK apps,
+`TPMS EU2` and `TPMS NA2` the OOK apps. Schrader MRXGG4 moved from `TPMS EU` /
+`TPMS NA` to `TPMS EU2` / `TPMS NA2` in v1.3.0, so if you used `TPMS EU` for a
+Schrader sensor, open `TPMS EU2` instead. There is no AUTO mode any more.
 
 ### Defaults and what you can change
 
-Each app loads its regional default band and demod on first install. Changes
-you make are remembered, except where a setting is fixed because every sensor
-in that app uses the same value.
+Each app loads its regional default band on first install. A band you
+change is remembered. The demod is set by the app.
 
-| App | Band (`2` / menu) | Mode (`*` / menu) |
+| App | Band (`2` / menu) | Demod |
 |---|---|---|
-| `TPMS EU` | Starts 433.92; toggle 315 / 433.92; remembered | Starts FSK; cycle FSK / OOK / AUTO; remembered |
-| `TPMS NA` | Starts 315; toggle 315 / 433.92; remembered | Starts FSK; cycle FSK / OOK / AUTO; remembered |
-| `TPMS EU2` | Fixed 433.92; no band control | Fixed OOK; no mode control |
-| `TPMS NA2` | Starts 315; toggle 315 / 433.92; remembered | Fixed OOK; no mode control |
+| `TPMS EU` | Starts 433.92; toggle 315 / 433.92; remembered | FSK |
+| `TPMS NA` | Starts 315; toggle 315 / 433.92; remembered | FSK |
+| `TPMS EU2` | Fixed 433.92; no band control | OOK |
+| `TPMS NA2` | Starts 315; toggle 315 / 433.92; remembered | OOK |
 
-`TPMS EU` and `TPMS NA` listen for the same three sensors. The only first-launch
+`TPMS EU` and `TPMS NA` listen for the same two sensors. The only first-launch
 difference is the default frequency (433.92 vs 315).
 
-`TPMS EU2` locks both band and mode: Vauxhall, Opel, Saab, BMW, and Mini on
-that app are all 433.92 MHz OOK. `TPMS NA2` locks mode to OOK (Chevrolet/GM,
-Subaru, Nissan) but still lets you change band, defaulting to 315 MHz.
+`TPMS EU2` locks the band: Schrader MRXGG4, Vauxhall, Opel, Saab, BMW, and
+Mini on that app are all 433.92 MHz OOK. `TPMS NA2` (Schrader MRXGG4,
+Chevrolet/GM, Subaru, Nissan) still lets you change band, defaulting to
+315 MHz.
 
 Newer BMW and Mini sensors that use FSK are not decoded. `TPMS EU2` covers
 the older Schrader sensor (often called MRXBC5A4 or MRXBMW433), including the
@@ -54,7 +59,8 @@ on screen is the Nissan reading. A Subaru sensor reads about a quarter high.
 Chevrolet and GM use a different sensor, shown as `EG53`, and that pressure
 is not affected.
 
-If `TPMS EU` or `TPMS NA` stays on Listening, try the second app for that region.
+If `TPMS EU` or `TPMS NA` stays on Listening, try the second app for that
+region: it listens for the OOK sensors.
 `1` turns the speaker on. `TPMS DBG` records the raw burst without decoding it
 and walks you through a check ([docs/debug.md](docs/debug.md)).
 
@@ -62,9 +68,8 @@ and walks you through a check ([docs/debug.md](docs/debug.md)).
 
 - Up to seven live rows. A repeat of the same sensor updates its row.
 - Band: 315.00 or 433.92 MHz, except `TPMS EU2`, which is fixed at 433.92 MHz.
-- Demod: FSK, OOK, or AUTO on `TPMS EU` and `TPMS NA`. AUTO listens to each
-  for about 2.5 seconds, and holds the one that just decoded for 10 seconds.
-  `TPMS EU2` and `TPMS NA2` are OOK only (no mode control).
+- Demod: FSK on `TPMS EU` and `TPMS NA`, OOK on `TPMS EU2` and `TPMS NA2`.
+  It is fixed per app, so the decoder always listens full time.
 - Options menu (`MENU`). The backlight stays on for 10 seconds after the last
   key, or stays off. The list stays on the screen.
 - Receive only.
@@ -101,7 +106,6 @@ On F4HWN Labs, load and manage overlay apps in the browser at
 |---|---|
 | `MENU` | Open the options menu. Inside the menu, cycle the selected item |
 | `2` | Toggle 315.00 / 433.92 MHz. No effect in `TPMS EU2` |
-| `*` | Cycle demod: FSK, OOK, AUTO. No effect in `TPMS EU2` or `TPMS NA2` |
 | `0` | Turn the backlight off and hide the status bulb. The screen stays drawn. Any key lights it again for 10 seconds and shows the bulb. `EXIT` still quits |
 | `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
 | `EXIT` | Quit (from the listen screen) or close the menu |
@@ -114,8 +118,7 @@ audio path is muted or there is no signal.
 
 | You notice | Cause | Fix |
 |---|---|---|
-| Hiss stops briefly every 2.5 s with the speaker on | Demod is `AUTO`. It swaps FSK and OOK every 2.5 s until a decode, then holds for 10 s. Each swap retunes and mutes audio for a moment, and each demod only listens half the time | Press `*` for `FSK` or `OOK` if you know the sensor type. Otherwise leave `AUTO` until a sensor decodes, then set the demod shown on the status line |
-| List stays on Listening | Wrong band or demod, weak signal, or an unsupported sensor | Run `TPMS DBG`, see [docs/debug.md](docs/debug.md) |
+| List stays on Listening | Wrong app for the sensor (FSK vs OOK), wrong band, weak signal, or an unsupported sensor | Try the other app for your region, then run `TPMS DBG`, see [docs/debug.md](docs/debug.md) |
 
 ### TPMS DBG
 
@@ -134,15 +137,13 @@ squelch problem.
 | Item | Values |
 |---|---|
 | `BAND` | `315.00` / `433.92`. Not shown in `TPMS EU2` |
-| `MODE` | `FSK` / `OOK` / `AUTO`. Not shown in `TPMS EU2` or `TPMS NA2` |
 | `CLEAR` | Wipe the seven live rows |
 
-`TPMS EU2` lists `CLEAR` only (fixed 433.92 OOK). `TPMS NA2` lists `BAND` and
-`CLEAR` (OOK fixed; band still changeable, default 315). `TPMS EU` and
-`TPMS NA` list all three items.
+`TPMS EU2` lists `CLEAR` only (fixed 433.92). The other apps list `BAND` and
+`CLEAR`.
 
 `UP` / `DOWN` (on the UV-K1, the navigation keys) move the selection. `MENU`,
-`*`, `2`, or `5` change the item. `EXIT` closes the menu.
+`2`, or `5` change the item. `EXIT` closes the menu.
 
 A valid decode blinks the green LED, including while the backlight is off.
 
@@ -172,22 +173,19 @@ Waiting and options screens for every flavour (EU, NA, EU2, NA2), with the
 active band and FSK/OOK protocol on the status line, are in
 [docs/variants.md](docs/variants.md).
 
-| Mode setting | Status text |
+| App | Status text |
 |---|---|
-| FSK | `433.92 FSK` |
-| OOK | `433.92 OOK` |
-| AUTO on FSK | `433.92 A:F` |
-| AUTO on OOK | `433.92 A:O` |
+| `TPMS EU` / `TPMS NA` | `433.92 FSK` |
+| `TPMS EU2` / `TPMS NA2` | `433.92 OOK` |
 
 The list uses the tiny font. A row looks like this:
 
 ```
 FORD A1B2C3D4 36psi 18C -67 4s
 TOYT 00F211A9 28psi 1C -72 12s
-SCHR 003A38B2 48psi 12C -81 2m
 ```
 
-`EG53` and `BMW` use the same layout. Nissan and Infiniti show as `NISS` and
+`SCHR`, `EG53` and `BMW` use the same layout. Nissan and Infiniti show as `NISS` and
 have no temperature. The number after the signal is the age: seconds, then
 minutes, then hours. Drawing the screen pauses decoding, so the list only
 redraws on a key press or 200 ms after a decode. Ages are as of that redraw.
@@ -206,9 +204,10 @@ Pressure on screen is whole PSI. Temperature is whole degrees Celsius.
   differential Manchester to 9 bytes. CRC-8, polynomial `0x07`, initial value
   `0x80`. The pressure bytes must match a check byte. PSI is
   `raw × 0.25 − 7`. Temperature is `raw − 40`.
-- **Schrader MRXGG4** (`TPMS EU`, `TPMS NA`). OOK Manchester, 68 bits. Drop
+- **Schrader MRXGG4** (`TPMS EU2`, `TPMS NA2`). OOK Manchester, 68 bits. Drop
   the sync nibble. CRC-8, polynomial `0x07`, initial value `0xF0`. Pressure
-  is `byte × 2.5` kPa. Temperature is `byte − 50`.
+  is `byte × 2.5` kPa. Temperature is `byte − 50`. It is tried after the
+  other OOK sensors, which have a sync word or pattern to match first.
 - **Schrader EG53MA4** (`TPMS EU2` for Vauxhall, Opel, and Saab; `TPMS NA2`
   for Chevrolet and other GM). OOK Manchester, 120 bits. Drop the first 40.
   The checksum is the sum of the next 9 bytes. Pressure uses the same

@@ -15,11 +15,14 @@ enum { TPMS_MODE_FSK = 0, TPMS_MODE_OOK = 1 };
     !defined(TPMS_FLAVOUR_EU2) && !defined(TPMS_FLAVOUR_NA2)
 #define TPMS_HOST_ALL 1
 #endif
+/* EU / NA are the FSK apps (Ford, Toyota). EU2 / NA2 are the OOK apps
+ * (Schrader, EG53, and BMW or Nissan). */
 #if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU) || defined(TPMS_FLAVOUR_NA)
 #define TPMS_HAVE_FSK 1
-#define TPMS_HAVE_SCHR 1
 #endif
 #if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
+#define TPMS_HAVE_OOK 1
+#define TPMS_HAVE_SCHR 1
 #define TPMS_HAVE_EG53 1
 #endif
 #if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU2)

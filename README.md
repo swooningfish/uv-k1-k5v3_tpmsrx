@@ -68,12 +68,6 @@ installed side by side, one per free slot.
 
 ## Using the app
 
-### Safety warning
-
-The listening screen, shown at every launch until a sensor is heard, ends
-with `PSI MAY BE WRONG: CHECK GAUGE` and `DRIVER IS RESPONSIBLE`. See the
-safety disclaimer at the top of this page.
-
 ### Keys
 
 | Key | Action |

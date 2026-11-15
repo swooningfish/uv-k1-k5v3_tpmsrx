@@ -297,7 +297,8 @@ static char *putAge(char *o, uint32_t age_ms)
  * @param ui Packed UI strings for this flavour.
  * @return Cursor after the digits.
  */
-static char *putBand(char *o, const char *ui)
+__attribute__((always_inline))
+static inline char *putBand(char *o, const char *ui)
 {
     return put(o, ui + (g.cfg.band433 ? T_B433 : T_B315));
 }
@@ -507,8 +508,9 @@ static void drawStatus(const char *ui)
 {
     char str[20];
     char *o;
-    unsigned width;
-    uint8_t bandX;
+    /* Band (6), demod (3) and both slots are always 12 cells, 48 px, so the
+       text fits between the title capsule and the 48 px battery reserve. */
+    const uint8_t bandX = (uint8_t)(128u - BATT_RESERVE - 12u * 4u);
     g.A->status_clear();
     g.A->draw_battery();
     g.A->print_inverse(ui + (g.menu ? T_MENU : T_TITLE), 2, 0, true, true,
@@ -520,10 +522,6 @@ static void drawStatus(const char *ui)
     *o++ = ' ';
     *o++ = ' ';
     *o = '\0';
-    /* Band (6), demod (3) and both slots are always 12 cells, 48 px, so the
-       text fits between the title capsule and the 48 px battery reserve. */
-    width = (unsigned)(o - str) * 4u;
-    bandX = (uint8_t)(128u - BATT_RESERVE - width);
     g.A->print_tiny(str, bandX, 1, true, true);
     drawLight(bandX);
     /* The icon fills the slot that ends where the band text ends. */
@@ -617,7 +615,7 @@ static void draw(const char *ui, const dectpms_t *dec)
         *o++ = ' ';
         o = put(o, ui + T_REGION);
         tinyCenter(str, 8, o);
-        /* Sensor rows, then the safety warning: one row per newline. */
+        /* Sensor rows: one row per newline. */
         {
             const char *s = ui + T_CARS;
             o = str;

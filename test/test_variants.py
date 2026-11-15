@@ -157,9 +157,8 @@ def test_assets_and_flavours() -> None:
         check(cars2_ok, f"{fl} car lines in gen_assets")
         check(len(ui["cars1"]) * 4 <= 128 and len(ui["cars2"]) * 4 <= 128,
               f"{fl} car lines fit width")
-        check('"PSI MAY BE WRONG: CHECK GAUGE"' in assets
-              and '"DRIVER IS RESPONSIBLE"' in assets,
-              f"{fl} safety warning rows on the listening screen")
+        check("PSI MAY BE WRONG" not in assets,
+              f"{fl} no safety warning rows on the listening screen")
         # Every app has one demod, so no hint offers a mode key. STAR is the
         # IF preset in the FSK apps and unused in the OOK apps.
         check("MODE" not in ui["hint"], f"{fl} hints omit mode")

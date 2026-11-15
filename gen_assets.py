@@ -17,18 +17,15 @@ HELP1_VER = HELP1 + " " * max(1, 31 - len(HELP1) - len(VER)) + VER
 # Second help row: the change hint left, the back hint right aligned the same way.
 HELP2, HELP3 = "MENU CHANGE", "EXIT BACK"
 HELP23 = HELP2 + " " * max(1, 31 - len(HELP2) - len(HELP3)) + HELP3
-# Safety warning under the sensor rows on the listening screen. The driver
-# must check pressures with a gauge: a reading here can be wrong.
-WARN = ["PSI MAY BE WRONG: CHECK GAUGE", "DRIVER IS RESPONSIBLE"]
 
 
 def rows(*lines):
-    """Pack listening-screen rows, then the safety warning rows.
+    """Pack listening-screen rows.
 
     @param lines Sensor rows shown above the warning.
     @return The rows joined, each ending in a newline.
     """
-    return "".join(line + "\n" for line in (*lines, *WARN))
+    return "".join(line + "\n" for line in lines)
 
 
 UI = [

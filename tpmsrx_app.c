@@ -595,6 +595,7 @@ static void menuChange(dectpms_t *dec)
 #endif
         case MENU_CLR:
             g.nRows = 0;
+            g.menu = 0; /* back to the listening screen */
             break;
         default:
             break;

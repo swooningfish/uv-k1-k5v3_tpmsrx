@@ -417,13 +417,13 @@ def scene_list():
 # drawWiz() in tpmsdbg_app.c place them.
 DBG_SCENES = {
     "dbg_idle": ("433.92 F", (
-        (0, "R-98 -98"),
+        (0, "R-98 -98 K18 S9"),
         (8, "A812/926 F9 U1 N0"),
         (16, "B0"),
         (24, "T42 Rb-98 W0 M0 L-"),
     )),
     "dbg_burst": ("433.92 F", (
-        (0, "R-72 -65"),
+        (0, "R-72 -65 K18 S9"),
         (8, "A1200/2400 F9 U1 N3"),
         (16, "B96 5556A1B2C3D45A69"),
         (24, "T80 Rb-98 W3 M3 L2"),

@@ -107,6 +107,7 @@ static struct {
     int16_t rssi, rssiPk;
     int32_t mean, amp, rbQ;
     uint32_t t0, lastHot, spikeAt, wizAt;
+    uint32_t cKey, cRssi;  /* worst stall, 48 MHz cycles: key poll, RSSI read */
     bool lcd, want;
     uint8_t cap[CAP_BYTES];
     uint8_t show[CAP_BYTES];
@@ -614,6 +615,11 @@ static void draw(void)
     o = puti(o, g.rssi);
     *o++ = ' ';
     o = puti(o, g.rssiPk);
+    /* Worst stall in us. Over ~26 us (one sample) the list apps lose time. */
+    o = put(o, " K");
+    o = puti(o, (int32_t)(g.cKey / 48u));
+    o = put(o, " S");
+    o = puti(o, (int32_t)(g.cRssi / 48u));
     tiny(str, 0, 0, o);
 
     o = str;
@@ -729,6 +735,8 @@ static bool keys(void)
             g.wakes = 0;
             g.matched = 0;
             g.rbOk = 0;
+            g.cKey = 0;
+            g.cRssi = 0;
             g.t0 = g.A->ticks_ms();
             g.showN = 0;
             memset(g.show, 0, sizeof g.show);
@@ -758,8 +766,11 @@ static void listen(void)
         next += CYC_PER_SAMPLE;
         push(sample());
         if (++g.colN >= COL_SAMPLES) {
+            uint32_t c = clk();
             g.colN = 0;
             g.rssi = g.A->rssi_dbm();
+            c = clk() - c;
+            if (c > g.cRssi) g.cRssi = c;
             if (g.rssi > g.rssiPk) g.rssiPk = g.rssi;
             meterTick();
             spikeTick();
@@ -775,12 +786,18 @@ static void listen(void)
         {
             /* Poll keys every KEY_EVERY samples and redraw every few polls.
                A redraw per sample stalls the 38.4 kHz loop and loses bursts. */
+            uint32_t c;
             if (!g.want && ++g.keyCnt < KEY_EVERY) continue;
             g.keyCnt = 0;
             wizTick();
+            /* Time the same calls the list apps make on each poll. A poll
+               with a key or a redraw due does more, so it is not counted. */
+            c = clk();
             if (keys()) break;
             g.A->backlight_update();
             g.A->backlight_on();
+            c = clk() - c;
+            if (!g.want && c > g.cKey) g.cKey = c;
 
             if (!g.want
                 && (++g.refresh < (uint8_t)(g.spk ? REFRESH_POLLS : REFRESH_FAST) || g.lcd))

@@ -42,7 +42,7 @@ speaker icon while the speaker is on. Under it are four rows:
 
 | Row | Format | Meaning |
 |---|---|---|
-| 1 | `R<now> <peak>` | Signal strength in dBm now, and the strongest since launch or `5` |
+| 1 | `R<now> <peak> K<us> S<us>` | Signal strength in dBm now, and the strongest since launch or `5`. `K` is the longest key poll and `S` the longest signal-strength read, in microseconds, since launch or `5`. Sampling stops during both. One sample is 26 us, so a value well over 26 means the list apps lose part of a burst when a poll or read lands inside it |
 | 2 | `A<now>/<peak> F<n> U<n> N<n>` | Loudest audio sample in the last 20 ms, and the strongest so far. `F` is the audio route: FSK should be `9`, OOK `7`, `0` is muted. `U` is `1` when the UHF antenna path read back. `N` is the number of bursts recorded |
 | 3 | `B<bits> <hex>` | Bit count of the last burst, then its first bytes in hex |
 | 4 | `T<s> Rb<dBm> W<n> M<n> L<s>` | Seconds since launch or `5`. Idle signal baseline. Wake attempts seen. Bursts recorded within 1 s of a wake attempt. Seconds since the last wake attempt (`-` until the first) |
@@ -59,8 +59,8 @@ Keep the radio still for the first 5 seconds, or press `5` to relearn `Rb`.
 
 | Situation | Screen | What it means |
 |---|---|---|
-| Idle, FSK, 433.92, path working | `R-98 -98` / `A812/926 F9 U1 N0` / `B0` / `T42 Rb-98 W0 M0 L-` | Quiet band. Audio is reaching the decoder (`F9`, `A` moving) and the UHF path is set (`U1`). No sensor has sent yet. This is not a squelch or mute fault |
-| Good burst | `R-72 -65` / `A1200/2400 F9 U1 N3` / `B96 5556A1B2…` / `T80 Rb-98 W3 M3 L2` | The signal jumped, bursts were recorded, and each matched a wake attempt |
+| Idle, FSK, 433.92, path working | `R-98 -98 K18 S9` / `A812/926 F9 U1 N0` / `B0` / `T42 Rb-98 W0 M0 L-` | Quiet band. Audio is reaching the decoder (`F9`, `A` moving) and the UHF path is set (`U1`). No sensor has sent yet. This is not a squelch or mute fault |
+| Good burst | `R-72 -65 K18 S9` / `A1200/2400 F9 U1 N3` / `B96 5556A1B2…` / `T80 Rb-98 W3 M3 L2` | The signal jumped, bursts were recorded, and each matched a wake attempt |
 | RF but no burst | `R-80 -70` / `… N0` / `… W2 M0` | A signal arrived but nothing was sliced. Try `*` for the other demod, or `2` for the other band |
 | Muted audio | `… F0 …` | The audio route is muted. Quit and relaunch |
 | Nothing at all | `R-98 -98` / `… N0` / `… W0` after waking a sensor | No signal reached the radio. Move closer, check the band and the antenna |

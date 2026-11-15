@@ -44,8 +44,8 @@ def flavour_ui(flavour: str) -> dict[str, str]:
     # Re-exec the same mapping without importing the SDK Assets class.
     regions = {"eu": "UK/EU", "na": "US/CA", "eu2": "UK/EU", "na2": "US/CA"}
     cars = {
-        "eu": ("FSK: FORD|TOYOTA", "V1.3.0"),
-        "na": ("FSK: FORD|TOYOTA", "V1.3.0"),
+        "eu": ("FSK: FORD|TOYOTA", "V1.3.1"),
+        "na": ("FSK: FORD|TOYOTA", "V1.3.1"),
         "eu2": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI|SCHRADER"),
         "na2": ("OOK: CHEVROLET|GM|SCHRADER", "OOK: SUBARU|NISSAN"),
     }
@@ -131,8 +131,8 @@ def test_layout_source() -> None:
     check("g.nRows <= 3u" in src, "free-row hints when 0–3 sensors")
     check("tinyCenter(str, 8, o)" in src and "tinyCenter(str, 16, o)" in src,
           "listening and cars shifted up")
-    check("LIGHT_ICON" in src and "if (g.blTime != BL_ALWAYS) return;" in src,
-          "status bulb only while the backlight is forced always on")
+    check("LIGHT_ICON" in src and "if (g.cfg.disp != DISP_ON) return;" in src,
+          "status bulb only while the force backlight option is on")
 
 
 def test_assets_and_flavours() -> None:

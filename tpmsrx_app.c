@@ -93,8 +93,10 @@ void *memset(void *d, int c, size_t n)
 #define MENU_SENS      1u
 #define MENU_CLR       2u
 #endif
-#define DISP_OFF       1u
+/* Saved display mode. 1 was the old "backlight off" mode and now loads as
+ * DISP_TMO. DISP_ON forces the lamp on and shows the bulb. */
 #define DISP_TMO       2u
+#define DISP_ON        3u
 #define DISP_IDLE_MS   10000u
 /* Radio backlight time in storage (gEeprom.BACKLIGHT_TIME, firmware v6.3.0
  * settings block 0xA008 byte 5). 0 keeps the lamp off, 61 is always on. */
@@ -136,7 +138,7 @@ typedef struct {
 typedef struct {
     uint8_t band433;
     uint8_t sens;     /* 0 low .. 2 high */
-    uint8_t disp;     /* DISP_OFF / DISP_TMO */
+    uint8_t disp;     /* DISP_TMO / DISP_ON */
 } app_cfg_t;
 
 static struct {
@@ -446,9 +448,10 @@ static void upsert(const tpms_pkt_t *p, int16_t rssi)
  * Draw the status bulb while the backlight is forced on.
  *
  * The bulb sits between the title capsule and the band.
- * It shows only when the radio backlight setting is always on, so the lamp
- * is kept lit regardless of keys. A key press that lights the lamp for the
- * idle window (the speaker key, for example) does not show it.
+ * It shows only while the force backlight option is on (key 0, or the radio
+ * backlight setting is always on), so the lamp is kept lit regardless of
+ * keys. A key press that lights the lamp for the idle window (the speaker
+ * key, for example) does not show it.
  *
  * @param bandX Left edge of the band text, in pixels.
  */
@@ -457,7 +460,7 @@ static void drawLight(uint8_t bandX)
     uint8_t *line;
     unsigned gap;
     /* Only a forced, always-on backlight earns the bulb. */
-    if (g.blTime != BL_ALWAYS) return;
+    if (g.cfg.disp != DISP_ON) return;
     if (bandX < TITLE_CAP_END + 2u + sizeof LIGHT_ICON) return;
     line = g.A->status_line;
     if (!line) return;
@@ -684,10 +687,9 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
            never dark, so EXIT quits straight away. */
         if (key == APP_KEY_EXIT && g.blTime == BL_ALWAYS) return true;
         g.blOff = 0;
-        if (g.cfg.disp == DISP_OFF) g.cfg.disp = DISP_TMO;
-        /* 0 toggle and EXIT are consumed as the wake */
-        if (key == APP_KEY_0 || key == APP_KEY_EXIT) return false;
-        /* fall through so other keys still act */
+        /* EXIT is consumed as the wake */
+        if (key == APP_KEY_EXIT) return false;
+        /* fall through so other keys still act; 0 forces the lamp on */
     }
 
     if (g.menu) {
@@ -727,8 +729,10 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             break;
 #endif
         case APP_KEY_0:
-            g.cfg.disp = DISP_OFF;
-            g.blOff = 1;
+            /* Toggle the force backlight option. Off returns to the idle
+               timeout, counted from this press. */
+            g.cfg.disp = (g.cfg.disp == DISP_ON) ? DISP_TMO : DISP_ON;
+            g.blOff = 0;
             break;
         default:
             break;
@@ -739,16 +743,16 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
 /**
  * Report whether the resident backlight should stay lit.
  *
- * The menu keeps the lamp on. After the last key it stays on for the
- * idle window. Display off leaves it off.
+ * The menu and the force backlight option keep the lamp on. Otherwise it
+ * stays on for the idle window after the last key.
  *
  * @return True when the lamp should be held on.
  */
 static bool backlightHeld(void)
 {
-    /* Menu stays lit. 10s holds the light after the last key. OFF releases it. */
-    if (g.menu) return true;
-    return g.cfg.disp == DISP_TMO && !g.blOff;
+    /* Menu and force stay lit. 10s holds the light after the last key. */
+    if (g.menu || g.cfg.disp == DISP_ON) return true;
+    return !g.blOff;
 }
 
 /**
@@ -904,7 +908,7 @@ void app_main(const app_api_t *api)
     g.cfg.sens = SENS_DEFAULT;
     if (cfg[0] == CFG_MAGIC || cfg[0] == 0xB2u || cfg[0] == 0xB1u) {
         g.cfg.band433 = cfg[1] ? 1u : 0u;
-        if (cfg[0] != 0xB1u && cfg[3] == DISP_OFF) g.cfg.disp = DISP_OFF;
+        if (cfg[0] != 0xB1u && cfg[3] == DISP_ON) g.cfg.disp = DISP_ON;
         if (cfg[0] == CFG_MAGIC && cfg[2] < SENS_LEVELS) g.cfg.sens = cfg[2];
     } else {
 #if defined(TPMS_FLAVOUR_NA) || defined(TPMS_FLAVOUR_NA2)
@@ -916,8 +920,9 @@ void app_main(const app_api_t *api)
 #if TPMS_LOCK_BAND
     g.cfg.band433 = TPMS_BAND433;
 #endif
-    if (g.cfg.disp == DISP_OFF) g.blOff = 1;
-    else api->backlight_on();
+    /* A radio backlight set to always on starts with the force option on. */
+    if (g.blTime == BL_ALWAYS) g.cfg.disp = DISP_ON;
+    api->backlight_on();
 
     applyRf();
     api->delay_ms(50);

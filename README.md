@@ -67,8 +67,8 @@ installed side by side, one per free slot.
 | `MENU` | Open the options menu |
 | `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
 | `2` | Switch between 315.00 and 433.92 MHz (`TPMS EU` and `TPMS NA` only) |
-| `0` | Backlight off. The screen stays drawn and decoding carries on. Any key lights it again for 10 seconds |
-| `EXIT` | Quit, or close the menu. With the backlight off, the first press only lights the screen |
+| `0` | Force backlight on or off. While forced, the screen stays lit and a light bulb shows on the status line. Off goes back to lighting the screen for 10 seconds after each key. Saved on exit |
+| `EXIT` | Quit, or close the menu. Once the screen has gone dark, the first press only lights it |
 
 With the speaker on you hear what the decoder hears. Hiss means the receiver
 is working, and a short rasp or click is a sensor sending. Silence means the
@@ -95,10 +95,11 @@ Decoding pauses while the menu is open, so a sensor that sends then is missed.
 The status line shows, from left to right:
 
 - `TPMS` (or `MENU` in the menu).
-- A light bulb only while the backlight is forced on, meaning the radio's own
-  backlight setting is always on (on firmware that lets apps read it). A key
-  that lights the screen for 10 seconds, such as `1` for the speaker, does
-  not show it.
+- A light bulb only while the backlight is forced on with `0`. It starts on
+  when the radio's own backlight setting is always on (on firmware that lets
+  apps read it); the radio then keeps the screen lit even with the bulb off.
+  A key that lights the screen for 10 seconds, such as `1` for the speaker,
+  does not show it.
 - The band and demod, for example `433.92 FSK` or `315.00 OOK`.
 - A speaker icon while the speaker is on. Its space is always reserved, so
   nothing shifts when it appears.
@@ -221,8 +222,8 @@ python3 tools/fetch_sdk.py   # downloads the F4HWN app SDK into sdk/
 - Redraw the screen pictures in `docs/`: `python3 tools/mock_lcd.py`.
 - The release version is `APP_VER` in `build.sh`.
 
-Code sizes in v1.3.0 (each app must fit the 4 KB app space): `TPMS EU` and
-`TPMS NA` 3764 B, `TPMS EU2` 3784 B, `TPMS NA2` 3840 B, `TPMS DBG` 3948 B.
+Code sizes in v1.3.1 (each app must fit the 4 KB app space): `TPMS EU` 3892 B,
+`TPMS NA` 3888 B, `TPMS EU2` 3892 B, `TPMS NA2` 3948 B, `TPMS DBG` 4060 B.
 
 ## License
 

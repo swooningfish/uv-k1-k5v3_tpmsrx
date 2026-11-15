@@ -198,14 +198,20 @@ Before any sensor is listed, the line under the cars shows them:
 - `TOYT 40/72` is the most bits one Toyota sync has decoded, out of the 72 in a
   frame, since the last retune. Noise alone seldom gets past about 12.
 
-How to read it, with a Toyota sensor woken next to the radio:
+How to read it, with a Toyota sensor woken next to the radio. Every key
+below resets the count, so change one setting, wake the sensor two or three
+times, then read the count. On the UV-K1, `UP` / `DOWN` are `RIGHT` / `LEFT`.
 
-| `TOYT` count | Meaning | Try |
+| `TOYT` count | Meaning | Keys to try, waking the sensor after each |
 |---|---|---|
-| Stays near 0–12 | No Toyota preamble heard | Check the band. Step the offset, then the presets |
-| Rises to 20–70 | Bursts are heard but break up | Step the offset 5 kHz either way, then try `7E28` and `7E0C` |
-| Reaches 72, no row | Whole frames decode but fail the CRC | Bit errors near the end, or a sensor that only looks like this Toyota format. Step the offset and presets |
-| A `TOYT` row appears | Working | Note the offset and preset that worked |
+| Stays near 0–12 | No Toyota preamble heard | `2` if the band may be wrong. Then `UP` once (`5K`), `DOWN` twice (`-5K`), `DOWN` once (`-10K`), `UP` three times (`10K`). Back at `0K`, `*` to try each preset |
+| Rises to 20–70 | Bursts are heard but break up | `UP` / `DOWN` to find the offset with the highest count. At that offset, `*` to step through `7E28`, `7E0C` and `7E08` |
+| Reaches 72, no row | Whole frames decode but fail the CRC | Bit errors near the end, or a sensor that only looks like this Toyota format. At the best preset, `UP` and `DOWN` one step each way |
+| A `TOYT` row appears | Working | None. Note the offset and preset on the test line; they are saved on exit |
+
+The test line only shows while the list is empty. If another sensor fills a
+row, `MENU` then `CLEAR` brings it back. To return to the defaults, press
+`UP` / `DOWN` until the line reads `0K`, then `*` until it reads `7E2C`.
 
 The decoder follows rtl_433's "Toyota TPMS" (Pacific PMV-C210, as in the Auris
 and Corolla): 52 µs chips. The Pacific PMV-107J used on many US Toyotas at

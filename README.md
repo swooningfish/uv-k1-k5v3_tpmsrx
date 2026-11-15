@@ -10,6 +10,14 @@ each one was heard. The radio never transmits.
 
 ![Listening for a sensor](docs/main_screen.png)
 
+> **Safety disclaimer.** These apps are hobby tools, not a certified tyre
+> pressure monitor. A reading can be wrong, out of date, or from another
+> car's sensor. Do not rely on them to decide whether a vehicle is safe to
+> drive. Always check tyre pressures with a calibrated gauge. The driver is
+> solely responsible for the condition and pressures of their tyres; the
+> authors accept no liability for any loss, damage or injury from using
+> these apps. See also the "AS IS" terms of the [LICENSE](LICENSE).
+
 ## Which app
 
 Pick the app for the region the car was sold in and the type of sensor it
@@ -59,6 +67,12 @@ installed side by side, one per free slot.
    `MENU`.
 
 ## Using the app
+
+### Safety warning
+
+The listening screen, shown at every launch until a sensor is heard, ends
+with `PSI MAY BE WRONG: CHECK GAUGE` and `DRIVER IS RESPONSIBLE`. See the
+safety disclaimer at the top of this page.
 
 ### Keys
 

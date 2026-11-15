@@ -14,6 +14,20 @@ TITLE = "TPMS"
 HELP1 = "UP/DN SELECT"
 VER = "V" + os.environ.get("APP_VER", "DEV")
 HELP1_VER = HELP1 + " " * max(1, 31 - len(HELP1) - len(VER)) + VER
+# Safety warning under the sensor rows on the listening screen. The driver
+# must check pressures with a gauge: a reading here can be wrong.
+WARN = ["PSI MAY BE WRONG: CHECK GAUGE", "DRIVER IS RESPONSIBLE"]
+
+
+def rows(*lines):
+    """Pack listening-screen rows, then the safety warning rows.
+
+    @param lines Sensor rows shown above the warning.
+    @return The rows joined, each ending in a newline.
+    """
+    return "".join(line + "\n" for line in (*lines, *WARN))
+
+
 UI = [
     ("T_TITLE", TITLE),
     # One demod per app: EU / NA are FSK, EU2 / NA2 are OOK.
@@ -25,26 +39,22 @@ UI = [
         "eu": [
             ("T_FORD", "FORD"), ("T_TOYT", "TOYT"),
             ("T_REGION", "UK/EU"),
-            ("T_CARS1", "FSK: FORD|TOYOTA"),
-            ("T_CARS2", VER),
+            ("T_CARS", rows("FSK: FORD|TOYOTA", VER)),
         ],
         "na": [
             ("T_FORD", "FORD"), ("T_TOYT", "TOYT"),
             ("T_REGION", "US/CA"),
-            ("T_CARS1", "FSK: FORD|TOYOTA"),
-            ("T_CARS2", VER),
+            ("T_CARS", rows("FSK: FORD|TOYOTA", VER)),
         ],
         "eu2": [
             ("T_EG53", "EG53"), ("T_BMW", "BMW"), ("T_SCHR", "SCHR"),
             ("T_REGION", "UK/EU"),
-            ("T_CARS1", "OOK: VAUXHALL|OPEL|SAAB"),
-            ("T_CARS2", "OOK: BMW|MINI|SCHRADER"),
+            ("T_CARS", rows("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI|SCHRADER")),
         ],
         "na2": [
             ("T_EG53", "EG53"), ("T_NISS", "NISS"), ("T_SCHR", "SCHR"),
             ("T_REGION", "US/CA"),
-            ("T_CARS1", "OOK: CHEVROLET|GM|SCHRADER"),
-            ("T_CARS2", "OOK: SUBARU|NISSAN"),
+            ("T_CARS", rows("OOK: CHEVROLET|GM|SCHRADER", "OOK: SUBARU|NISSAN")),
         ],
     }[os.environ.get("FLAVOUR", "eu")],
     ("T_MENU", "MENU"),

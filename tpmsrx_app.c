@@ -598,13 +598,20 @@ static void draw(const char *ui)
         *o++ = ' ';
         o = put(o, ui + T_REGION);
         tinyCenter(str, 8, o);
-        o = put(str, ui + T_CARS1);
-        tinyCenter(str, 16, o);
-        y = 24;
-        if (ui[T_CARS2]) {
-            o = put(str, ui + T_CARS2);
-            tinyCenter(str, y, o);
-            y = (uint8_t)(y + 8u);
+        /* Sensor rows, then the safety warning: one row per newline. */
+        {
+            const char *s = ui + T_CARS;
+            o = str;
+            y = 16;
+            for (; *s; s++) {
+                if (*s != '\n') {
+                    *o++ = *s;
+                    continue;
+                }
+                tinyCenter(str, y, o);
+                y = (uint8_t)(y + 8u);
+                o = str;
+            }
         }
         o = put(str, ui + T_MENU);
         *o = '\0';

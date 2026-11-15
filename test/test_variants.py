@@ -129,7 +129,7 @@ def test_layout_source() -> None:
     check('put(str, ui + T_WAIT)' in src and "putBand(o)" in src and "T_REGION" in src,
           "LISTENING line merges band and region")
     check("g.nRows <= 3u" in src, "free-row hints when 0–3 sensors")
-    check("tinyCenter(str, 8, o)" in src and "tinyCenter(str, 16, o)" in src,
+    check("tinyCenter(str, 8, o)" in src and "ui + T_CARS;" in src and "y = 16;" in src,
           "listening and cars shifted up")
     check("LIGHT_ICON" in src and "if (g.cfg.disp != DISP_ON) return;" in src,
           "status bulb only while the force backlight option is on")
@@ -147,12 +147,15 @@ def test_assets_and_flavours() -> None:
         check(ui["region"] in assets, f"{fl} region in gen_assets")
         # FSK apps show the app version (VER) on the second car line.
         if ui["mode"] == "FSK":
-            cars2_ok = '("T_CARS2", VER)' in assets
+            cars2_ok = f'rows("{ui["cars1"]}", VER)' in assets
         else:
-            cars2_ok = ui["cars2"] in assets
-        check(ui["cars1"] in assets and cars2_ok, f"{fl} car lines in gen_assets")
+            cars2_ok = f'rows("{ui["cars1"]}", "{ui["cars2"]}")' in assets
+        check(cars2_ok, f"{fl} car lines in gen_assets")
         check(len(ui["cars1"]) * 4 <= 128 and len(ui["cars2"]) * 4 <= 128,
               f"{fl} car lines fit width")
+        check('"PSI MAY BE WRONG: CHECK GAUGE"' in assets
+              and '"DRIVER IS RESPONSIBLE"' in assets,
+              f"{fl} safety warning rows on the listening screen")
         # Every app has one demod, so no hint offers a mode key.
         check("*" not in ui["hint"] and "MODE" not in ui["hint"], f"{fl} hints omit mode")
         # Headline length fits 128 px tiny font (4 px/glyph).

@@ -62,6 +62,7 @@ void *memset(void *d, int c, size_t n)
 #define FREQ_433       43392000u
 #define KEY_EVERY      1536u
 #define DRAW_HOLD_MS   200u
+#define VIEW_EVERY_MS  500u
 #define LED_STEP       (FS / 10u)
 #define CFG_MAGIC      0xB3u
 /* Sensitivity: 0 low, 1 mid (the old fixed gate), 2 high. */
@@ -144,7 +145,7 @@ static struct {
     uint8_t blTime;   /* radio backlight time: 0 off, BL_ALWAYS on, else timed */
     uint16_t ledCnt, keyCnt;
     int16_t rssi;
-    uint32_t lastHit, lastKey;
+    uint32_t lastHit, lastKey, lastView;
     app_cfg_t cfg;
     row_t *rows;
 } g;
@@ -839,6 +840,17 @@ static void listen(const char *ui)
         g.A->backlight_update();
         if (backlightHeld()) g.A->backlight_on();
 
+        /* A screen capture (UV Studio, K5Viewer) pings, then waits for a frame,
+           but blit_full only sends one when the screen is redrawn. Offer the
+           viewer a frame between redraws; it sends nothing with no viewer.
+           viewer_update (offset 388) is past the end of an older level 3 table. */
+        if (!wantUi && g.A->api_size >= 392u
+            && (uint32_t)(g.A->ticks_ms() - g.lastView) >= VIEW_EVERY_MS) {
+            g.lastView = g.A->ticks_ms();
+            g.A->viewer_update();
+            next = clk() + CYC_PER_SAMPLE;
+        }
+
         if (wantUi) {
             g.drawDue = 0;
             g.A->battery_sample();
@@ -871,6 +883,7 @@ void app_main(const app_api_t *api)
     g.nRows = 0;
     g.menu = 0;
     g.blOff = 0;
+    g.lastView = 0;
     g.spk = 0;
     g.cfg.disp = DISP_TMO;
     /* Unknown (no storage read on this firmware) keeps the timed behaviour. */

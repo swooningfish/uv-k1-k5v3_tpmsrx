@@ -803,6 +803,9 @@ static void listen(void)
 
             g.refresh = 0;
             g.want = false;
+            /* lcd_feed sends no K5Viewer frame, so a screen capture would wait
+               forever: send it the frame the feed just finished. */
+            if (!g.lcd && g.A->api_size >= 392u) g.A->viewer_update();
             g.A->battery_sample();
             draw();
             pushLcd();

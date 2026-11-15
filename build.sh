@@ -8,7 +8,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 APP=tpmsrx
-APP_VER="0.3"
+# Release version: packed into the .app header and shown on the menu screen.
+APP_VER="1.3.0"
 APP_API_MIN=3
 APP_VMA=${APP_VMA:-0x20000280}
 PYTHON=${PYTHON:-python3}
@@ -65,7 +66,7 @@ for spec in "${SETS[@]}"; do
   CUR="$name"
   out="${name// /}"
   printf '  🔨 %-12s\n' "$name"
-  FLAVOUR="$set" SDK="$SDK" "$PYTHON" ./gen_assets.py \
+  FLAVOUR="$set" APP_VER="$APP_VER" SDK="$SDK" "$PYTHON" ./gen_assets.py \
       "${OUT_DIR}/${APP}_assets.bin" "${OUT_DIR}/${APP}_assets.h"
   "$CC" $CFLAGS -D"$def"=1 \
       -nostdlib -nostartfiles -T app.ld -Wl,--defsym,APP_VMA=${APP_VMA} \

@@ -500,7 +500,7 @@ static void drawStatus(const char *ui)
  */
 static void drawMenu(const char *ui)
 {
-    char str[28];
+    char str[32]; /* 31-cell help row with the version + NUL */
     char *o;
 #if defined(TPMS_FLAVOUR_EU2)
     const uint16_t labels[1] = { T_CLR };

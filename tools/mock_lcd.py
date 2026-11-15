@@ -6,8 +6,13 @@ armel/uv-k1-k5v3-firmware-custom (Apache-2.0, Copyright 2023 Dual Tachyon).
 GUI_DisplaySmallest walks three columns, LSB at the top, and advances 4 px.
 """
 import os
+import re
 import struct
 import zlib
+
+# Release version, read from APP_VER in build.sh like the real menu shows it.
+with open(os.path.join(os.path.dirname(__file__), "..", "build.sh"), encoding="utf-8") as _f:
+    APP_VER = re.search(r'^APP_VER="([^"]+)"', _f.read(), re.M).group(1)
 
 # ASCII 32..127. Index is ord(c) - 32. Column byte, low bit is the top pixel.
 FONT = (
@@ -383,6 +388,8 @@ def scene_menu(v):
     for i, (s, end) in enumerate(v["menu"]):
         inverse(fb, s, 2, i + 1, end, False)
     text(fb, 2, 8 + 41, "UP/DN SELECT")
+    ver_s = "V" + APP_VER
+    text(fb, 126 - len(ver_s) * 4, 8 + 41, ver_s)
     text(fb, 2, 8 + 47, "MENU CHANGE")
     exit_s = "EXIT BACK"
     text(fb, 126 - len(exit_s) * 4, 8 + 47, exit_s)

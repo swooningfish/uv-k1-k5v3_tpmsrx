@@ -8,6 +8,12 @@ sys.path.insert(0, os.environ.get("SDK", "sdk"))
 from app_assets import Assets
 
 TITLE = "TPMS"
+# Version (APP_VER from build.sh) sits right aligned on the first menu help
+# row. The row starts at x=2 with 4 px glyphs, so 31 cells end at x=126.
+# Baking it into the string keeps the 4 KiB overlay free of drawing code.
+HELP1 = "UP/DN SELECT"
+VER = "V" + os.environ.get("APP_VER", "DEV")
+HELP1_VER = HELP1 + " " * max(1, 31 - len(HELP1) - len(VER)) + VER
 UI = [
     ("T_TITLE", TITLE),
     ("T_FSK", "FSK"),
@@ -48,7 +54,7 @@ UI = [
     ("T_BAND", "BAND"),
     ("T_MODE", "MODE"),
     ("T_CLR", "CLEAR"),
-    ("T_HELP1", "UP/DN SELECT"),
+    ("T_HELP1", HELP1_VER),
     ("T_HELP2", "MENU CHANGE"),
     ("T_HELP3", "EXIT BACK"),
     # Listening-screen key strip (no MENU — that is the bottom-left capsule).

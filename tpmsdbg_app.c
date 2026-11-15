@@ -597,8 +597,7 @@ static void draw(void)
 {
     char str[34];
     char *o;
-    uint8_t (*fb)[128] = g.A->fb;
-    uint8_t nb, p;
+    uint8_t nb;
     uint32_t now = g.A->ticks_ms();
     uint16_t r47 = g.A->bk_read(REG_47);
     uint16_t r33 = g.A->bk_read(REG_33);
@@ -660,8 +659,6 @@ static void draw(void)
     if (g.wakes) o = puti(o, (int32_t)((now - g.lastHot) / 1000u));
     else *o++ = '-';
     tiny(str, 0, 24, o);
-
-    for (p = 4; p < 8u; p++) memset(fb[p], 0, 128);
 }
 
 /**
@@ -679,7 +676,8 @@ static void pushLcd(void)
     }
     g.lcd = false;
     g.A->blit_status();
-    if (g.spk && !g.wiz) {
+    /* blit_page (offset 380) is past the end of an older level 3 table. */
+    if (g.spk && !g.wiz && g.A->api_size >= 384u) {
         g.A->blit_page(1);
         g.A->blit_page(2);
         g.A->blit_page(3);

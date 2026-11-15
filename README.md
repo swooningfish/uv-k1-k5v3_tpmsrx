@@ -93,9 +93,10 @@ or `5` change it. `EXIT` closes the menu. The menu also shows the app version.
 The status line shows, from left to right:
 
 - `TPMS` (or `MENU` in the menu).
-- A light bulb while the backlight is on. On firmware that lets apps read
-  the radio's settings, the bulb also follows the radio's own backlight
-  setting: it never shows if that is OFF, and always shows if it is always on.
+- A light bulb only while the backlight is forced on, meaning the radio's own
+  backlight setting is always on (on firmware that lets apps read it). A key
+  that lights the screen for 10 seconds, such as `1` for the speaker, does
+  not show it.
 - The band and demod, for example `433.92 FSK` or `315.00 OOK`.
 - A speaker icon while the speaker is on. Its space is always reserved, so
   nothing shifts when it appears.

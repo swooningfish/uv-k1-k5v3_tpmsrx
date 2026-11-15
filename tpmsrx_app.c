@@ -395,12 +395,12 @@ static void upsert(const tpms_pkt_t *p, int16_t rssi)
 }
 
 /**
- * Draw the status bulb while the backlight is lit and the gap fits.
+ * Draw the status bulb while the backlight is forced on.
  *
  * The bulb sits between the title capsule and the band.
- * It hides when the idle timeout turns the lamp off, and after the 0 key.
- * It follows the radio backlight setting when the firmware can read it:
- * never shown when that is OFF, always shown when it is always on.
+ * It shows only when the radio backlight setting is always on, so the lamp
+ * is kept lit regardless of keys. A key press that lights the lamp for the
+ * idle window (the speaker key, for example) does not show it.
  *
  * @param bandX Left edge of the band text, in pixels.
  */
@@ -408,10 +408,8 @@ static void drawLight(uint8_t bandX)
 {
     uint8_t *line;
     unsigned gap;
-    /* Radio backlight OFF: BACKLIGHT_TurnOn never lights the lamp. */
-    if (!g.blTime) return;
-    /* Always on: the lamp stays lit after the idle timeout and the 0 key. */
-    if (g.blTime != BL_ALWAYS && (g.cfg.disp != DISP_TMO || g.blOff)) return;
+    /* Only a forced, always-on backlight earns the bulb. */
+    if (g.blTime != BL_ALWAYS) return;
     if (bandX < TITLE_CAP_END + 2u + sizeof LIGHT_ICON) return;
     line = g.A->status_line;
     if (!line) return;

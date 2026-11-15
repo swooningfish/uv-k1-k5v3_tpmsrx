@@ -124,8 +124,8 @@ def test_layout_source() -> None:
     check("g.nRows <= 3u" in src, "free-row hints when 0–3 sensors")
     check("tinyCenter(str, 8, o)" in src and "tinyCenter(str, 16, o)" in src,
           "listening and cars shifted up")
-    check("LIGHT_ICON" in src and "g.cfg.disp != DISP_TMO" in src,
-          "status bulb only while the light setting is on")
+    check("LIGHT_ICON" in src and "if (g.blTime != BL_ALWAYS) return;" in src,
+          "status bulb only while the backlight is forced always on")
 
 
 def test_assets_and_flavours() -> None:

@@ -2,229 +2,174 @@
 
 [![Build](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/actions/workflows/build.yml/badge.svg)](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/actions/workflows/build.yml)
 
-Receive-only apps for the
+Receive-only tyre-pressure (TPMS) apps for the
 [F4HWN firmware](https://github.com/armel/uv-k1-k5v3-firmware-custom) on the
-Quansheng UV-K1 and UV-K5 V3. Each app shows a live list of tyre-pressure
-sensors: model, id, pressure, temperature, signal, and how long ago the sensor
-was heard. There is no packet history, and the radio never transmits.
-
-Pick the app for the country the car was sold in. The United Kingdom and
-Europe share an app. The United States and Canada share another.
-
-All four apps are built from the same sources (`tpmsrx_app.c`, `dectpms.c`)
-with a compile flag (`TPMS_FLAVOUR_EU`, `_NA`, `_EU2`, `_NA2`) and matching
-asset strings. There are no separate regional `.c` trees.
-
-## Which app
-
-| App | Where | Default band | Default mode | Cars | Signal | Size |
-|---|---|---|---|---|---|---|
-| `TPMS EU` | UK and Europe | 433.92 MHz | FSK | Ford, Toyota | FSK | 3564 B |
-| `TPMS NA` | United States and Canada | 315 MHz | FSK | Ford, Toyota | FSK | 3564 B |
-| `TPMS EU2` | UK and Europe | 433.92 MHz (fixed) | OOK | Schrader MRXGG4; Vauxhall, Opel, Saab; BMW and Mini with the Schrader sensor | OOK | 3456 B |
-| `TPMS NA2` | United States and Canada | 315 MHz | OOK | Schrader MRXGG4; Chevrolet and other GM; Subaru; Nissan and Infiniti | OOK | 3648 B |
-| `TPMS DBG` | Either band, no decode | 433.92 MHz | FSK | Records raw bursts | FSK or OOK | 3916 B |
-
-Each list app has one demod. `TPMS EU` and `TPMS NA` are the FSK apps,
-`TPMS EU2` and `TPMS NA2` the OOK apps. Schrader MRXGG4 moved from `TPMS EU` /
-`TPMS NA` to `TPMS EU2` / `TPMS NA2` in v1.3.0, so if you used `TPMS EU` for a
-Schrader sensor, open `TPMS EU2` instead. There is no AUTO mode any more.
-
-### Defaults and what you can change
-
-Each app loads its regional default band on first install. A band you
-change is remembered. The demod is set by the app.
-
-| App | Band (`2` / menu) | Demod |
-|---|---|---|
-| `TPMS EU` | Starts 433.92; toggle 315 / 433.92; remembered | FSK |
-| `TPMS NA` | Starts 315; toggle 315 / 433.92; remembered | FSK |
-| `TPMS EU2` | Fixed 433.92; no band control | OOK |
-| `TPMS NA2` | Starts 315; toggle 315 / 433.92; remembered | OOK |
-
-`TPMS EU` and `TPMS NA` listen for the same two sensors. The only first-launch
-difference is the default frequency (433.92 vs 315).
-
-`TPMS EU2` locks the band: Schrader MRXGG4, Vauxhall, Opel, Saab, BMW, and
-Mini on that app are all 433.92 MHz OOK. `TPMS NA2` (Schrader MRXGG4,
-Chevrolet/GM, Subaru, Nissan) still lets you change band, defaulting to
-315 MHz.
-
-Newer BMW and Mini sensors that use FSK are not decoded. `TPMS EU2` covers
-the older Schrader sensor (often called MRXBC5A4 or MRXBMW433), including the
-Mini models that use that same sensor.
-
-On `TPMS NA2`, Subaru and Nissan send the same kind of packet. The pressure
-on screen is the Nissan reading. A Subaru sensor reads about a quarter high.
-Chevrolet and GM use a different sensor, shown as `EG53`, and that pressure
-is not affected.
-
-If `TPMS EU` or `TPMS NA` stays on Listening, try the second app for that
-region: it listens for the OOK sensors.
-`1` turns the speaker on. `TPMS DBG` records the raw burst without decoding it
-and walks you through a check ([docs/debug.md](docs/debug.md)).
-
-## What every app does
-
-- Up to seven live rows. A repeat of the same sensor updates its row.
-- Band: 315.00 or 433.92 MHz, except `TPMS EU2`, which is fixed at 433.92 MHz.
-- Demod: FSK on `TPMS EU` and `TPMS NA`, OOK on `TPMS EU2` and `TPMS NA2`.
-  It is fixed per app, so the decoder always listens full time.
-- Options menu (`MENU`). The backlight stays on for 10 seconds after the last
-  key, or stays off. The list stays on the screen.
-- Receive only.
-
-## Requirements
-
-- A Quansheng UV-K1 or UV-K5 V3 with F4HWN Labs or Fusion that includes
-  overlay apps (API level 3 or higher; tested against the v6.3.0 SDK headers).
-- Install with UV Studio into a free app slot. The apps can be installed
-  together.
-
-## Install
-
-1. Download the zip for the app in the table from the
-   [Releases](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/releases) page
-   and unzip it. GitHub rejects a `.app` upload, so each release file is a
-   zip: `TPMSEU.zip`, `TPMSNA.zip`, `TPMSEU2.zip`, `TPMSNA2.zip`, `TPMSDBG.zip`. A
-   [workflow artifact](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/actions)
-   is the raw `.app`.
-2. Open [UV Studio Apps](https://armel.github.io/uvstudio/#apps), connect the
-   radio (F4HWN Labs), and install the `.app` from a local file into a free
-   slot.
-3. On the radio, open the Apps menu (`F` then `7`), select the app name from
-   the table, and press `MENU`.
-
-## UV Studio
-
-On F4HWN Labs, load and manage overlay apps in the browser at
-[UV Studio Apps](https://armel.github.io/uvstudio/#apps).
-
-## Keys
-
-| Key | Action |
-|---|---|
-| `MENU` | Open the options menu. Inside the menu, cycle the selected item |
-| `2` | Toggle 315.00 / 433.92 MHz. No effect in `TPMS EU2` |
-| `0` | Turn the backlight off and hide the status bulb. The screen stays drawn. Any key lights it again for 10 seconds and shows the bulb. `EXIT` still quits |
-| `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
-| `EXIT` | Quit (from the listen screen) or close the menu |
-
-`1` sends the same audio the decoder hears to the speaker. Hiss means the
-receiver is alive. A short rasp or click is a sensor burst. Silence means the
-audio path is muted or there is no signal.
-
-### Troubleshooting
-
-| You notice | Cause | Fix |
-|---|---|---|
-| List stays on Listening | Wrong app for the sensor (FSK vs OOK), wrong band, weak signal, or an unsupported sensor | Try the other app for your region, then run `TPMS DBG`, see [docs/debug.md](docs/debug.md) |
-
-### TPMS DBG
-
-Separate app for when a list app stays on Listening. It does not decode. It
-parks on the same frequencies and audio route as the list apps, records each
-raw burst, counts wake attempts from signal jumps, and has a Yes / No wizard on
-`MENU` that suggests what to change. Keys, screen fields, example readings and
-the wizard are in [docs/debug.md](docs/debug.md).
-
-The screen can show audio (`A`) moving while nothing is decoded. Signal (`R`)
-that never jumps when a sensor is woken means no RF reached the radio, not a
-squelch problem.
-
-### Options menu
-
-| Item | Values |
-|---|---|
-| `BAND` | `315.00` / `433.92`. Not shown in `TPMS EU2` |
-| `CLEAR` | Wipe the seven live rows |
-
-`TPMS EU2` lists `CLEAR` only (fixed 433.92). The other apps list `BAND` and
-`CLEAR`.
-
-`UP` / `DOWN` (on the UV-K1, the navigation keys) move the selection. `MENU`,
-`2`, or `5` change the item. `EXIT` closes the menu.
-
-A valid decode blinks the green LED, including while the backlight is off.
-
-## Screen
-
-The status line shows `TPMS` (or `MENU`) on the left, a light bulb while the
-backlight is lit, the band and demod just left of the battery, and the
-battery percent plus icon on the right (same F4HWN / Temp 433 status battery).
-The bulb goes when the light times out or `0` turns it off, and comes back
-with the light on the next key. On firmware that lets apps read settings
-(F4HWN Labs with overlay info), the bulb also follows the radio's own
-backlight setting: it never shows when that is OFF, because the light never
-comes on, and it always shows when that is set to always on. A speaker icon after the demod means the
-speaker is on. Its space is always kept, so the status line does not move.
-
-While no sensors have been heard, the listening line is
-`LISTENING <band> <region>`, then the car / protocol lines, then free-row
-shortcut hints when there are three or fewer sensors.
+Quansheng UV-K1 and UV-K5 V3. Each app shows a live list of the sensors it
+hears: model, id, pressure, temperature, signal strength, and how long ago
+each one was heard. The radio never transmits.
 
 ![Listening for a sensor](docs/main_screen.png)
 
-![A few sensors](docs/list.png)
+## Which app
+
+Pick the app for the region the car was sold in and the type of sensor it
+uses. If you are not sure, install both apps for your region.
+
+| App | Region | Band | Demod | Sensors |
+|---|---|---|---|---|
+| `TPMS EU` | UK and Europe | 433.92 MHz (can switch to 315) | FSK | Ford, Toyota |
+| `TPMS NA` | United States and Canada | 315 MHz (can switch to 433.92) | FSK | Ford, Toyota |
+| `TPMS EU2` | UK and Europe | 433.92 MHz, fixed | OOK | Schrader MRXGG4; Vauxhall, Opel, Saab; BMW and Mini (older Schrader sensor) |
+| `TPMS NA2` | United States and Canada | 315 MHz, fixed | OOK | Schrader MRXGG4; Chevrolet and other GM; Subaru; Nissan and Infiniti |
+| `TPMS DBG` | Either | 433.92 MHz (can switch) | FSK or OOK | No decoding: records raw bursts to find out why a list app hears nothing |
+
+- `TPMS EU` and `TPMS NA` are the same app with a different starting band.
+  A band you change is remembered.
+- **Upgrading from before v1.3.0?** Schrader MRXGG4 moved from `TPMS EU` /
+  `TPMS NA` to `TPMS EU2` / `TPMS NA2`, and the AUTO mode is gone. Each app
+  now has one demod.
+- BMW and Mini: only the older Schrader sensor (often sold as MRXBC5A4 or
+  MRXBMW433) is decoded. Newer FSK sensors are not.
+- Subaru and Nissan send the same kind of packet and cannot be told apart.
+  Both show as `NISS` on the Nissan pressure scale, so **a Subaru tyre reads
+  about a quarter higher than it really is**. Chevrolet and GM use a
+  different sensor (`EG53`) and read correctly.
+
+All five apps build from the same sources (`tpmsrx_app.c`, `dectpms.c`, and
+`tpmsdbg_app.c` for `TPMS DBG`) with a flavour flag, so there are no separate
+regional code trees.
+
+## Install
+
+You need a UV-K1 or UV-K5 V3 running F4HWN Labs or Fusion with overlay apps
+(app API level 3 or higher; tested against the v6.3.0 SDK). The apps can be
+installed side by side, one per free slot.
+
+1. Download the zip for your app from the
+   [Releases](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/releases)
+   page (`TPMSEU.zip`, `TPMSNA.zip`, `TPMSEU2.zip`, `TPMSNA2.zip`,
+   `TPMSDBG.zip`) and unzip it to get the `.app` file. Releases are zipped
+   because GitHub rejects `.app` uploads. Each
+   [build workflow run](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/actions)
+   also has the raw `.app` files as artifacts.
+2. Open [UV Studio Apps](https://armel.github.io/uvstudio/#apps) in your
+   browser, connect the radio, and install the `.app` from a local file into a
+   free slot.
+3. On the radio, open the Apps menu (`F` then `7`), select the app, and press
+   `MENU`.
+
+## Using the app
+
+### Keys
+
+| Key | Action |
+|---|---|
+| `MENU` | Open the options menu |
+| `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
+| `2` | Switch between 315.00 and 433.92 MHz (`TPMS EU` and `TPMS NA` only) |
+| `0` | Backlight off. The screen stays drawn and decoding carries on. Any key lights it again for 10 seconds |
+| `EXIT` | Quit, or close the menu |
+
+With the speaker on you hear what the decoder hears. Hiss means the receiver
+is working, and a short rasp or click is a sensor sending. Silence means the
+audio is muted or there is no signal.
+
+A good decode blinks the green LED, even with the backlight off.
+
+### Options menu
 
 ![Options menu](docs/menu.png)
 
-Waiting and options screens for every flavour (EU, NA, EU2, NA2), with the
-active band and FSK/OOK protocol on the status line, are in
-[docs/variants.md](docs/variants.md).
-
-| App | Status text |
+| Item | What it does |
 |---|---|
-| `TPMS EU` / `TPMS NA` | `433.92 FSK` |
-| `TPMS EU2` / `TPMS NA2` | `433.92 OOK` |
+| `BAND` | `315.00` / `433.92`. Only in `TPMS EU` and `TPMS NA` |
+| `CLEAR` | Wipe the list |
 
-The list uses the tiny font. A row looks like this:
+`UP` / `DOWN` (the navigation keys on the UV-K1) select an item. `MENU`, `2`
+or `5` change it. `EXIT` closes the menu. The menu also shows the app version.
+
+### The screen
+
+The status line shows, from left to right:
+
+- `TPMS` (or `MENU` in the menu).
+- A light bulb while the backlight is on. On firmware that lets apps read
+  the radio's settings, the bulb also follows the radio's own backlight
+  setting: it never shows if that is OFF, and always shows if it is always on.
+- The band and demod, for example `433.92 FSK` or `315.00 OOK`.
+- A speaker icon while the speaker is on. Its space is always reserved, so
+  nothing shifts when it appears.
+- The battery percent and icon.
+
+Before any sensor is heard, the screen shows `LISTENING <band> <region>` and
+the cars that app decodes. While there are three or fewer sensors, the free
+rows show key hints.
+
+The list holds up to seven sensors. A sensor that is heard again updates its
+own row.
+
+![A few sensors](docs/list.png)
 
 ```
 FORD A1B2C3D4 36psi 18C -67 4s
 TOYT 00F211A9 28psi 1C -72 12s
 ```
 
-`SCHR`, `EG53` and `BMW` use the same layout. Nissan and Infiniti show as `NISS` and
-have no temperature. The number after the signal is the age: seconds, then
-minutes, then hours. Drawing the screen pauses decoding, so the list only
-redraws on a key press or 200 ms after a decode. Ages are as of that redraw.
+Each row is: model, id, pressure in whole PSI, temperature in whole °C,
+signal in dBm, and age (seconds, then minutes, then hours). Models are
+`FORD`, `TOYT`, `SCHR`, `EG53`, `BMW` and `NISS`. `NISS` has no temperature.
+
+Drawing the screen pauses decoding, so the list only redraws on a key press
+or 200 ms after a decode. Ages are as of the last redraw.
+
+The waiting and menu screens for all four list apps are in
+[docs/variants.md](docs/variants.md).
+
+### Troubleshooting
+
+If the list stays on `LISTENING`:
+
+1. Wake the sensor: use a TPMS tool, let a little air out, or drive a short
+   distance. Most sensors send rarely while parked.
+2. Try the other app for your region. `TPMS EU` / `TPMS NA` hear FSK sensors,
+   `TPMS EU2` / `TPMS NA2` hear OOK sensors.
+3. Turn the speaker on (`1`) and listen for a rasp when the sensor sends.
+4. Run `TPMS DBG`. It does not decode, but it shows whether any signal reaches
+   the radio and records each raw burst, and its `MENU` wizard suggests what
+   to change. See [docs/debug.md](docs/debug.md).
+
+If `TPMS DBG` records bursts but no list app shows the sensor, that sensor
+model is probably not supported.
 
 ## How a reading is checked
 
 The field layouts follow [`rtl_433`](https://github.com/merbanan/rtl_433).
-Pressure on screen is whole PSI. Temperature is whole degrees Celsius.
+Every packet must pass its checksum before it is shown.
 
-- **Ford** (`TPMS EU`, `TPMS NA`). FSK. The air preamble is `55 56`, which is
-  `AA A9` after the bits are flipped. Manchester decoding yields 8 bytes. The
-  sum of bytes 0 to 6 must equal byte 7. Pressure is the PSI byte times 4,
-  and flag bit `0x20` is a ninth pressure bit. Temperature is
-  `(byte & 0x7f) - 56` when bit `0x80` is clear.
-- **Toyota** (`TPMS EU`, `TPMS NA`). FSK. A 12-bit preamble `A9E`, then
-  differential Manchester to 9 bytes. CRC-8, polynomial `0x07`, initial value
-  `0x80`. The pressure bytes must match a check byte. PSI is
-  `raw × 0.25 − 7`. Temperature is `raw − 40`.
-- **Schrader MRXGG4** (`TPMS EU2`, `TPMS NA2`). OOK Manchester, 68 bits. Drop
-  the sync nibble. CRC-8, polynomial `0x07`, initial value `0xF0`. Pressure
-  is `byte × 2.5` kPa. Temperature is `byte − 50`. It is tried after the
-  other OOK sensors, which have a sync word or pattern to match first.
-- **Schrader EG53MA4** (`TPMS EU2` for Vauxhall, Opel, and Saab; `TPMS NA2`
-  for Chevrolet and other GM). OOK Manchester, 120 bits. Drop the first 40.
-  The checksum is the sum of the next 9 bytes. Pressure uses the same
-  `byte × 2.5` kPa scale. The packet stores Fahrenheit; the screen shows
-  Celsius.
+- **Ford** (`TPMS EU`, `TPMS NA`). FSK. Preamble `55 56`, or `AA A9` when the
+  signal arrives inverted. Manchester decoding gives 8 bytes, and bytes 0 to 6
+  must sum to byte 7. Pressure is a 9-bit value in quarter PSI (flag bit
+  `0x20` is the ninth bit). Temperature is `(byte & 0x7f) − 56` °C, and is
+  left out when bit `0x80` is set.
+- **Toyota** (`TPMS EU`, `TPMS NA`). FSK. 12-bit preamble `A9E` (or `561`
+  inverted), then differential Manchester to 9 bytes. CRC-8, polynomial
+  `0x07`, initial value `0x80`, and the pressure must match an inverted copy
+  of itself. PSI is `raw ÷ 4 − 7`. Temperature is `raw − 40` °C.
+- **Schrader EG53MA4** (`TPMS EU2` for Vauxhall, Opel and Saab; `TPMS NA2` for
+  Chevrolet and other GM). OOK Manchester, 120 bits; the first 40 are
+  dropped. The next 9 bytes must sum to the checksum byte. Pressure is
+  `byte × 2.5` kPa. The packet holds Fahrenheit, shown as Celsius.
 - **Schrader MRXBC5A4** (`TPMS EU2`, BMW and Mini). OOK Manchester, 61 bits,
-  opening with 16 bits of `0111 1111 1111 1111`. The id is 24 bits. Pressure
-  is 1 kPa per step. Temperature is the byte minus 50, and a reading is kept
-  only when pressure is at most 450 kPa and temperature is between −40 °C and
-  85 °C. The two check bits are weak on their own, so those limits are part
-  of the check.
-- **Nissan NIS315G3 and Subaru SMD3MA4** (`TPMS NA2`). OOK PCM, then
-  Manchester. Nissan, Infiniti, and the related Redi-Sensor use one pressure
-  scale. Subaru uses another, and the two cannot be told apart from the
-  packet. The row is labelled `NISS` and uses the Nissan scale (PSI is the
-  raw value divided by 4). There is no temperature. A Subaru tyre reads about
-  a quarter higher than it is.
+  starting with `0111 1111 1111 1111`. 24-bit id. Pressure is 1 kPa per step,
+  temperature is `byte − 50` °C. The two check bits are weak, so a reading is
+  also rejected above 450 kPa or outside −40 to 85 °C.
+- **Nissan NIS315G3 and Subaru SMD3MA4** (`TPMS NA2`). OOK PCM with sync
+  `555E`, then Manchester. PSI is `raw ÷ 4` (Nissan scale, see the Subaru note
+  under [Which app](#which-app)). No temperature.
+- **Schrader MRXGG4** (`TPMS EU2`, `TPMS NA2`). OOK Manchester, 68 bits; the
+  sync nibble is dropped. CRC-8, polynomial `0x07`, initial value `0xF0`.
+  Pressure is `byte × 2.5` kPa, temperature `byte − 50` °C. It has no sync
+  word of its own, so it is tried last.
 
 ## How it works
 
@@ -236,40 +181,38 @@ FSK:  RF -> BK4829 raw AF, wide IF, AFC off -> PA4 at 38.4 kHz
 OOK:  RF -> BK4829 AM -> PA4 at 38.4 kHz
           -> slicer -> Manchester bits -> checksum -> row
 
-NA2:  the same OOK path, then a second Manchester pass for Nissan and Subaru
+NA2:  the same OOK path, plus a second pass on the raw bits for Nissan and Subaru
 ```
 
-The app writes 315.000 or 433.920 MHz into the receiver and turns the UHF
-antenna path on when that switch can be read back. Leaving the app restores
-the channel you were on before.
+The app tunes the receiver to 315.000 or 433.920 MHz and switches on the UHF
+antenna path where it can read that switch back. Quitting restores the
+channel you were on.
 
 ## Build
 
-Docker writes the four apps into `build/`. The image is built on first use.
+With Docker, this builds all five apps into `build/` and runs the host parser
+tests. The image is built on first use.
 
 ```sh
 ./build-docker.sh
 ```
 
-One flavour at a time: `./build.sh eu`, `na`, `eu2`, or `na2`.
-
-With `arm-none-eabi-gcc`, Python 3, and bash already installed:
+Without Docker you need `arm-none-eabi-gcc`, Python 3 and bash:
 
 ```sh
 python3 tools/fetch_sdk.py   # downloads the F4HWN app SDK into sdk/
-./build.sh                   # writes build/TPMSEU.app and the other three
+./build.sh                   # writes build/TPMSEU.app, TPMSNA.app, TPMSEU2.app, TPMSNA2.app, TPMSDBG.app
 ```
 
-Set `PYTHON` if your Python 3 is not called `python3`, for example
-`PYTHON=python ./build.sh`.
+- Build one app: `./build.sh eu`, `na`, `eu2`, `na2` or `dbg`.
+- Set `PYTHON` if Python 3 is not called `python3`, for example
+  `PYTHON=python ./build.sh`.
+- Run the host parser tests (no radio needed): `./test/run_tests.sh`.
+- Redraw the screen pictures in `docs/`: `python3 tools/mock_lcd.py`.
+- The release version is `APP_VER` in `build.sh`.
 
-Host parser tests (no radio) run at the end of `build-docker.sh`. On their own:
-
-```sh
-./test/run_tests.sh
-```
-
-Screen pictures in `docs/` are drawn by `python3 tools/mock_lcd.py`.
+Code sizes in v1.3.0 (each app must fit the 4 KB app space): `TPMS EU` and
+`TPMS NA` 3564 B, `TPMS EU2` 3456 B, `TPMS NA2` 3512 B, `TPMS DBG` 3916 B.
 
 ## License
 

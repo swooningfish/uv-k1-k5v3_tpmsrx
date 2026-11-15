@@ -1,9 +1,11 @@
 # Variant screens
 
-All four apps are built from the same `tpmsrx_app.c` with a flavour flag.
-These LCD mocks (`python3 tools/mock_lcd.py`) show the waiting screen and the
-options menu for each variant. The status line carries the active **band** and
-**protocol** (FSK or OOK); car lines name the sensors that flavour decodes.
+The four list apps are built from the same `tpmsrx_app.c` with a flavour
+flag. These LCD mocks show the waiting screen and the options menu for each
+one. The status line shows the active **band** and **demod** (FSK or OOK),
+and the car lines name the sensors that app decodes. `TPMS EU` and `TPMS NA`
+show `BAND` and `CLEAR` in the menu; `TPMS EU2` and `TPMS NA2` have a fixed
+band, so they show `CLEAR` only.
 
 Regenerate with:
 
@@ -13,7 +15,7 @@ python3 tools/mock_lcd.py
 
 ## TPMS EU — UK / Europe, default 433.92 FSK
 
-Ford and Toyota (FSK only). Band is changeable. Schrader MRXGG4 is in TPMS EU2.
+Ford and Toyota (FSK only). Band can be switched. Schrader MRXGG4 is in TPMS EU2.
 
 ![EU waiting](variants/eu_waiting.png)
 
@@ -35,9 +37,9 @@ Schrader MRXGG4, Vauxhall / Opel / Saab (EG53) and BMW / Mini (MRXBC5A4). Band l
 
 ![EU2 options menu](variants/eu2_menu.png)
 
-## TPMS NA2 — US / Canada, default 315.00 OOK
+## TPMS NA2 — US / Canada, 315.00 OOK (fixed)
 
-Schrader MRXGG4, Chevrolet / GM (EG53), Subaru / Nissan. Band still toggles.
+Schrader MRXGG4, Chevrolet / GM (EG53), Subaru / Nissan. Band locked.
 
 ![NA2 waiting](variants/na2_waiting.png)
 

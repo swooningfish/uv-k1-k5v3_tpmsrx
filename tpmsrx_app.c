@@ -124,6 +124,18 @@ static const uint8_t LIGHT_ICON[9] = {
 static const uint8_t SENS_GATE[SENS_LEVELS] = { 60u, 40u, 28u };
 static const uint16_t SENS_LABEL[SENS_LEVELS] = { T_SLO, T_SMID, T_SHI };
 
+#if TPMS_HAVE_FSK
+/* FSK test settings: STAR cycles the REG_43 IF / demod preset, the arrow
+ * keys move the tuning by FOFF_STEP. Preset 0 is the shipped value.
+ * Bit 2 changes the gain after the FM demod by 6 dB. Bits 5:4 pick the
+ * 25 kHz (10) or 12.5 kHz (00) bandwidth mode; 12.5 kHz gives more audio
+ * per kHz of deviation but clips wide FSK sooner. */
+static const uint16_t IF_PRESET[4] = { 0x7E2Cu, 0x7E28u, 0x7E0Cu, 0x7E08u };
+/* 5 kHz in 10 Hz units. The offset is a 4-bit two's complement nibble,
+ * -40 to +35 kHz, and the arrows wrap from one end to the other. */
+#define FOFF_STEP      500
+#endif
+
 /* Speaker: box, cone, one sound wave. 7 status columns, LSB is the top pixel. */
 static const uint8_t SPK_ICON[7] = {
     0x1Cu, 0x1Cu, 0x3Eu, 0x7Fu, 0x00u, 0x22u, 0x1Cu
@@ -142,6 +154,8 @@ typedef struct {
     uint8_t band433;
     uint8_t sens;     /* 0 low .. 2 high */
     uint8_t disp;     /* DISP_TMO / DISP_ON */
+    uint8_t ifp;      /* FSK: IF_PRESET index */
+    uint8_t foff;     /* FSK: tuning offset nibble, see foffSteps */
 } app_cfg_t;
 
 static struct {
@@ -154,6 +168,18 @@ static struct {
     app_cfg_t cfg;
     row_t *rows;
 } g;
+
+#if TPMS_HAVE_FSK
+/**
+ * Tuning offset in FOFF_STEP units, from the saved nibble.
+ *
+ * @return -8 to 7.
+ */
+static int32_t foffSteps(void)
+{
+    return (int8_t)(uint8_t)(g.cfg.foff << 4) >> 4;
+}
+#endif
 
 /**
  * Unsigned divide and remainder for the ARM EABI.
@@ -231,9 +257,11 @@ static char *puti(char *o, int32_t v)
  */
 static char *putHex(char *o, uint32_t v, uint8_t digits)
 {
-    for (int i = (int)digits - 1; i >= 0; i--) {
-        uint8_t n = (uint8_t)((v >> (i * 4)) & 0xfu);
-        *o++ = (char)(n < 10u ? (char)('0' + n) : (char)('A' + (n - 10u)));
+    while (digits--) {
+        uint8_t c = (uint8_t)('0' + ((v >> (digits * 4u)) & 0xfu));
+        /* '9' + 1 + 7 is 'A'. */
+        if (c > '9') c = (uint8_t)(c + 7u);
+        *o++ = (char)c;
     }
     return o;
 }
@@ -266,20 +294,12 @@ static char *putAge(char *o, uint32_t age_ms)
  * Append 315.00 or 433.92 from the saved band.
  *
  * @param o Cursor to write at.
+ * @param ui Packed UI strings for this flavour.
  * @return Cursor after the digits.
  */
-static char *putBand(char *o)
+static char *putBand(char *o, const char *ui)
 {
-    o = puti(o, g.cfg.band433 ? 433 : 315);
-    *o++ = '.';
-    if (g.cfg.band433) {
-        *o++ = '9';
-        *o++ = '2';
-    } else {
-        *o++ = '0';
-        *o++ = '0';
-    }
-    return o;
+    return put(o, ui + (g.cfg.band433 ? T_B433 : T_B315));
 }
 
 /**
@@ -345,13 +365,20 @@ static void selectUhfLna(void)
 static void applyRf(void)
 {
     uint32_t f = g.cfg.band433 ? FREQ_433 : FREQ_315;
+#if TPMS_HAVE_FSK
+    f += (uint32_t)(foffSteps() * FOFF_STEP);
+#endif
     g.A->bk_write(REG_38, (uint16_t)(f & 0xFFFFu));
     g.A->bk_write(REG_39, (uint16_t)(f >> 16));
     g.A->tones_off_rx();
     /* Shared front-end: wide IF, filters bypassed, AFC off, fixed gain. */
     g.A->bk_write(REG_2B, (uint16_t)((g.A->bk_read(REG_2B) | 0x0700u) & ~0x0007u));
     g.A->bk_write(REG_73, (uint16_t)(g.A->bk_read(REG_73) | 0x0010u));
+#if TPMS_HAVE_FSK
+    g.A->bk_write(REG_43, IF_PRESET[g.cfg.ifp]);
+#else
     g.A->bk_write(REG_43, REG_43_WIDE);
+#endif
     g.A->set_agc(false);
     /* AF last: clears mute from tones_off_rx. FSK = raw bypass; OOK = AM. */
 #if TPMS_HAVE_FSK
@@ -486,7 +513,7 @@ static void drawStatus(const char *ui)
     g.A->draw_battery();
     g.A->print_inverse(ui + (g.menu ? T_MENU : T_TITLE), 2, 0, true, true,
                        (uint8_t)(2u + T_TITLE_CHARS * 4u));
-    o = putBand(str);
+    o = putBand(str, ui);
     *o++ = ' ';
     o = put(o, ui + T_DEMOD);
     /* Always reserve 8 px for the speaker icon so the band and bulb never shift. */
@@ -526,7 +553,7 @@ static void drawMenu(const char *ui)
 #if !TPMS_LOCK_BAND
         if (i == MENU_BAND) {
             *o++ = ' ';
-            o = putBand(o);
+            o = putBand(o, ui);
         }
 #endif
         if (i == MENU_SENS) {
@@ -538,17 +565,11 @@ static void drawMenu(const char *ui)
         g.A->print_inverse(str, 2, (uint8_t)(i + 1u), false, true,
                            (uint8_t)(i == g.menuSel ? 100u : 78u));
     }
-    /* Body is 56 px. A 6 px glyph at y=47 ends at pixel 52. */
-    o = put(str, ui + T_HELP1);
-    tiny(str, 2, 41, o);
-    o = put(str, ui + T_HELP2);
-    tiny(str, 2, 47, o);
-    o = put(str, ui + T_HELP3);
-    {
-        unsigned hw = (unsigned)(o - str) * 4u;
-        uint8_t hx = (uint8_t)((hw >= 126u) ? 2u : (126u - hw));
-        tiny(str, hx, 47, o);
-    }
+    /* Body is 56 px. A 6 px glyph at y=47 ends at pixel 52. Both help
+       rows are 31 cells, padded in gen_assets.py so the right-hand text
+       ends at x=126. */
+    g.A->print_tiny(ui + T_HELP1, 2, 41, false, true);
+    g.A->print_tiny(ui + T_HELP2, 2, 47, false, true);
 }
 
 /**
@@ -558,22 +579,20 @@ static void drawMenu(const char *ui)
  */
 static void drawListHints(const char *ui)
 {
-    char str[28];
-    char *o = put(str, ui + T_HINT);
-    unsigned w = (unsigned)(o - str) * 4u;
-    uint8_t x = (uint8_t)((w >= 126u) ? 2u : (126u - w));
     /* Body line 6. print_inverse draws glyphs at (line * 8) + 1.
-     * y is body pixels (0..55); 57 is the next page and lands on the status line. */
-    tiny(str, x, 49, o);
+     * y is body pixels (0..55); 57 is the next page and lands on the status line.
+     * gen_assets.py sets HINT_X so the strip ends at x=126. */
+    g.A->print_tiny(ui + T_HINT, HINT_X, 49, false, true);
 }
 
 /**
  * Draw the menu, the listening screen, or the live sensor list.
  *
  * @param ui Packed UI strings for this flavour.
+ * @param dec Slicer whose FSK test counters the listening screen shows.
  */
 __attribute__((noinline))
-static void draw(const char *ui)
+static void draw(const char *ui, const dectpms_t *dec)
 {
     /* Widest row: model, 8-digit id, six int16 or age fields, and units. */
     char str[48];
@@ -594,7 +613,7 @@ static void draw(const char *ui)
         /* "LISTENING 433.92 UK/EU" — band + region on one line. */
         o = put(str, ui + T_WAIT);
         *o++ = ' ';
-        o = putBand(o);
+        o = putBand(o, ui);
         *o++ = ' ';
         o = put(o, ui + T_REGION);
         tinyCenter(str, 8, o);
@@ -613,6 +632,20 @@ static void draw(const char *ui)
                 o = str;
             }
         }
+#if TPMS_HAVE_FSK
+        /* Test line on the blank second car row, e.g.
+           "-5K IF7E2C TOYT 40/72": tuning offset, REG_43 preset, and the
+           most Toyota bits one sync decoded since the last retune. */
+        o = puti(str, foffSteps() * 5);
+        o = put(o, ui + T_IF);
+        o = putHex(o, IF_PRESET[g.cfg.ifp], 4);
+        o = put(o, ui + T_TY);
+        o = puti(o, dec->ty_best);
+        o = put(o, ui + T_TYEND);
+        tinyCenter(str, 24, o);
+#else
+        (void)dec;
+#endif
         o = put(str, ui + T_MENU);
         *o = '\0';
         w = (unsigned)(o - str) * 4u;
@@ -734,9 +767,12 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
 #if !TPMS_LOCK_BAND
         case APP_KEY_2:
             g.cfg.band433 ^= 1u;
-            applyRf();
-            decInit(dec);
-            break;
+            goto retune;
+#endif
+#if TPMS_HAVE_FSK
+        case APP_KEY_STAR:
+            g.cfg.ifp = (uint8_t)((g.cfg.ifp + 1u) & 3u);
+            goto retune;
 #endif
         case APP_KEY_0:
             /* Toggle the force backlight option. Off returns to the idle
@@ -745,9 +781,26 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             g.blOff = 0;
             break;
         default:
+#if TPMS_HAVE_FSK
+        {
+            /* Arrows move the tuning offset one step. */
+            int8_t d = g.A->nav_dir(key);
+            if (!d) break;
+            g.cfg.foff = (uint8_t)((g.cfg.foff + d) & 15u);
+            goto retune;
+        }
+#else
             break;
+#endif
     }
     return false;
+#if TPMS_HAVE_FSK || !TPMS_LOCK_BAND
+retune:
+    /* Band, IF preset or offset changed: park again and reset the counters. */
+    applyRf();
+    decInit(dec);
+    return false;
+#endif
 }
 
 /**
@@ -795,7 +848,6 @@ static void listen(const char *ui)
 #if !TPMS_HAVE_FSK
     bool rssiDue = true;
 #endif
-    g.lastHit = 0;
     g.lastKey = g.A->ticks_ms();
 
     for (;;) {
@@ -823,6 +875,14 @@ static void listen(const char *ui)
             g.drawDue = 1u;
             dectpms_rearm(&dec);
         }
+#if TPMS_HAVE_FSK
+        /* The Toyota test counter rose: redraw at the next poll that is
+           DRAW_HOLD_MS past the last decode. */
+        if (dec.note) {
+            dec.note = 0;
+            g.drawDue = 1u;
+        }
+#endif
 
         if (g.led && ++g.ledCnt >= LED_STEP) {
             g.ledCnt = 0;
@@ -868,7 +928,7 @@ static void listen(const char *ui)
         if (wantUi) {
             g.drawDue = 0;
             g.A->battery_sample();
-            draw(ui);
+            draw(ui, &dec);
             g.A->blit_status();
             g.A->blit_full();
             wantUi = false;
@@ -892,14 +952,11 @@ void app_main(const app_api_t *api)
     uint16_t r43, r2b, r73;
 
     memset(rows, 0, sizeof rows);
+    /* The overlay loader does not clear BSS, so start every field at 0. */
+    memset(&g, 0, sizeof g);
     g.A = api;
     g.rows = rows;
     g.prevKey = APP_KEY_INVALID;
-    g.nRows = 0;
-    g.menu = 0;
-    g.blOff = 0;
-    g.lastView = 0;
-    g.spk = 0;
     g.cfg.disp = DISP_TMO;
     /* Unknown (no storage read on this firmware) keeps the timed behaviour. */
     g.blTime = 1u;
@@ -914,13 +971,21 @@ void app_main(const app_api_t *api)
 
     /* Defaults per flavour (first launch). The saved band is restored when
      * present, then EU2 forces 433.92 and NA2 forces 315.00. Byte 2 held the
-     * old demod choice (0xB1 / 0xB2) and now holds the sensitivity (0xB3). */
+     * old demod choice (0xB1 / 0xB2) and now holds the sensitivity (0xB3).
+     * FSK apps pack the IF preset in bits 3:2 and the signed tuning offset
+     * in bits 7:4, so an older save (0..2) loads them as 0. */
     api->cfg_load(cfg, 4);
     g.cfg.sens = SENS_DEFAULT;
     if (cfg[0] == CFG_MAGIC || cfg[0] == 0xB2u || cfg[0] == 0xB1u) {
         g.cfg.band433 = cfg[1] ? 1u : 0u;
         if (cfg[0] != 0xB1u && cfg[3] == DISP_ON) g.cfg.disp = DISP_ON;
-        if (cfg[0] == CFG_MAGIC && cfg[2] < SENS_LEVELS) g.cfg.sens = cfg[2];
+        if (cfg[0] == CFG_MAGIC && (cfg[2] & 3u) < SENS_LEVELS) {
+            g.cfg.sens = cfg[2] & 3u;
+#if TPMS_HAVE_FSK
+            g.cfg.ifp = (uint8_t)((cfg[2] >> 2) & 3u);
+            g.cfg.foff = (uint8_t)(cfg[2] >> 4);
+#endif
+        }
     } else {
 #if defined(TPMS_FLAVOUR_NA) || defined(TPMS_FLAVOUR_NA2)
         g.cfg.band433 = 0u; /* 315.00 MHz */
@@ -950,7 +1015,11 @@ void app_main(const app_api_t *api)
 
     cfg[0] = CFG_MAGIC;
     cfg[1] = g.cfg.band433;
+#if TPMS_HAVE_FSK
+    cfg[2] = (uint8_t)(g.cfg.sens | (g.cfg.ifp << 2) | (g.cfg.foff << 4));
+#else
     cfg[2] = g.cfg.sens;
+#endif
     cfg[3] = g.cfg.disp;
     api->cfg_save(cfg, 4);
 }

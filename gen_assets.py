@@ -14,6 +14,9 @@ TITLE = "TPMS"
 HELP1 = "UP/DN SELECT"
 VER = "V" + os.environ.get("APP_VER", "DEV")
 HELP1_VER = HELP1 + " " * max(1, 31 - len(HELP1) - len(VER)) + VER
+# Second help row: the change hint left, the back hint right aligned the same way.
+HELP2, HELP3 = "MENU CHANGE", "EXIT BACK"
+HELP23 = HELP2 + " " * max(1, 31 - len(HELP2) - len(HELP3)) + HELP3
 # Safety warning under the sensor rows on the listening screen. The driver
 # must check pressures with a gauge: a reading here can be wrong.
 WARN = ["PSI MAY BE WRONG: CHECK GAUGE", "DRIVER IS RESPONSIBLE"]
@@ -39,12 +42,18 @@ UI = [
         "eu": [
             ("T_FORD", "FORD"), ("T_TOYT", "TOYT"),
             ("T_REGION", "UK/EU"),
-            ("T_CARS", rows("FSK: FORD|TOYOTA", VER)),
+            ("T_CARS", rows("FSK: FORD|TOYOTA", "")),
+            # The blank second car row holds the FSK test line (offset, IF
+            # preset, Toyota decode progress). The menu still shows VER.
+            ("T_IF", "K IF"), ("T_TY", " TOYT "), ("T_TYEND", "/72"),
         ],
         "na": [
             ("T_FORD", "FORD"), ("T_TOYT", "TOYT"),
             ("T_REGION", "US/CA"),
-            ("T_CARS", rows("FSK: FORD|TOYOTA", VER)),
+            ("T_CARS", rows("FSK: FORD|TOYOTA", "")),
+            # The blank second car row holds the FSK test line (offset, IF
+            # preset, Toyota decode progress). The menu still shows VER.
+            ("T_IF", "K IF"), ("T_TY", " TOYT "), ("T_TYEND", "/72"),
         ],
         "eu2": [
             ("T_EG53", "EG53"), ("T_BMW", "BMW"), ("T_SCHR", "SCHR"),
@@ -66,13 +75,14 @@ UI = [
     ("T_SHI", "HIGH"),
     ("T_CLR", "CLEAR"),
     ("T_HELP1", HELP1_VER),
-    ("T_HELP2", "MENU CHANGE"),
-    ("T_HELP3", "EXIT BACK"),
+    ("T_HELP2", HELP23),
+    ("T_B315", "315.00"),
+    ("T_B433", "433.92"),
     # Listening-screen key strip (no MENU — that is the bottom-left capsule).
     # Omit band when the flavour locks it. No app switches demod.
     *{
-        "eu": [("T_HINT", "1 SPK  2 BAND  0 LIGHT")],
-        "na": [("T_HINT", "1 SPK  2 BAND  0 LIGHT")],
+        "eu": [("T_HINT", "1 SPK 2 BAND * IF 0 LIGHT")],
+        "na": [("T_HINT", "1 SPK 2 BAND * IF 0 LIGHT")],
         "eu2": [("T_HINT", "1 SPK  0 LIGHT")],
         "na2": [("T_HINT", "1 SPK  0 LIGHT")],
     }[os.environ.get("FLAVOUR", "eu")],
@@ -84,6 +94,9 @@ for name, value in UI:
     a.text(name, value + "\0" * pad)
     ui_size += len(value) + 1 + pad
 a.const("UI_SIZE", ui_size)
+# Listening key strip: right aligned so it ends at x=126 (4 px cells).
+_hint = dict(UI)["T_HINT"]
+a.const("HINT_X", max(2, 126 - 4 * len(_hint)))
 a.const("T_TITLE_CHARS", len(TITLE))
 # EU2 / NA2: SENS + CLEAR (fixed band). EU / NA: BAND + SENS + CLEAR.
 _flavour = os.environ.get("FLAVOUR", "eu")

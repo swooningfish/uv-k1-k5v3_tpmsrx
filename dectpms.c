@@ -373,6 +373,9 @@ void dectpms_init(dectpms_t *d, uint8_t mode)
     d->level = 0;
     d->half = 0;
     d->gate = HYST;
+#if TPMS_HAVE_FSK
+    d->ty_best = d->note = 0;
+#endif
     raw_clear(d);
 }
 
@@ -429,6 +432,10 @@ static bool finish_ford(dectpms_t *d, tpms_pkt_t *out)
 /**
  * Differential-Manchester decode the Toyota buffer and parse it.
  *
+ * Also keeps the test counters. Noise behind a false sync seldom decodes
+ * more than about a dozen bits, so a high ty_best means a real Toyota
+ * burst arrived even when no row appears.
+ *
  * @param d Slicer holding the raw Toyota bits.
  * @param out Filled on success.
  * @return True when a full frame decodes and checks out.
@@ -437,7 +444,12 @@ static bool finish_toyota(dectpms_t *d, tpms_pkt_t *out)
 {
     uint8_t pkt[9];
     for (unsigned i = 0; i < 9u; i++) pkt[i] = 0;
-    if (dman_decode(d->raw, d->bitn, pkt, 72) < 72u) return false;
+    unsigned n = dman_decode(d->raw, d->bitn, pkt, 72);
+    if (n > d->ty_best) {
+        d->ty_best = (uint8_t)n;
+        d->note = 1u;
+    }
+    if (n < 72u) return false;
     return tpms_parse_toyota(pkt, out);
 }
 #endif

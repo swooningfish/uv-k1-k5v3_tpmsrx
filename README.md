@@ -81,6 +81,8 @@ safety disclaimer at the top of this page.
 | `MENU` | Open the options menu |
 | `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
 | `2` | Switch between 315.00 and 433.92 MHz (`TPMS EU` and `TPMS NA` only) |
+| `*` | Next IF / demod preset (`TPMS EU` and `TPMS NA` only). See [Toyota test settings](#toyota-test-settings) |
+| `UP` / `DOWN` | Move the tuning 5 kHz up or down (`TPMS EU` and `TPMS NA` only; the navigation keys on the UV-K1). See [Toyota test settings](#toyota-test-settings) |
 | `0` | Force backlight on or off. While forced, the screen stays lit and a light bulb shows on the status line. Off goes back to lighting the screen for 10 seconds after each key. Saved on exit |
 | `EXIT` | Quit, or close the menu. Once the screen has gone dark, the first press only lights it |
 
@@ -120,8 +122,10 @@ The status line shows, from left to right:
 - The battery percent and icon.
 
 Before any sensor is heard, the screen shows `LISTENING <band> <region>` and
-the cars that app decodes. While there are three or fewer sensors, the free
-rows show key hints (`1 SPK`, `2 BAND`, `0 LIGHT`).
+the cars that app decodes. `TPMS EU` and `TPMS NA` add the Toyota test line
+under the cars (see [Toyota test settings](#toyota-test-settings)). While
+there are three or fewer sensors, the free rows show key hints (`1 SPK`,
+`2 BAND`, `* IF`, `0 LIGHT`).
 
 The list holds up to seven sensors. A sensor that is heard again updates its
 own row.
@@ -165,6 +169,47 @@ If the list stays on `LISTENING`:
 
 If `TPMS DBG` records bursts but no list app shows the sensor, that sensor
 model is probably not supported.
+
+### Toyota test settings
+
+`TPMS EU` and `TPMS NA` have two radio settings for testing Toyota (and Ford)
+reception. Both are saved on exit. Changing either one, or the band, retunes
+the radio and resets the test line.
+
+Before any sensor is listed, the line under the cars shows them:
+
+```
+-5K IF7E2C TOYT 40/72
+```
+
+- `-5K` is the tuning offset from 315.00 or 433.92 MHz, in kHz. `UP` / `DOWN`
+  move it 5 kHz at a time, from −40 to +35 kHz. One more step wraps to the
+  other end. The default is `0K`.
+- `IF7E2C` is the BK4819 IF / demod register (`REG_43`). `*` steps through
+  four presets:
+
+  | Preset | Meaning |
+  |---|---|
+  | `7E2C` | Default. 25 kHz mode, normal audio gain after the FM demod |
+  | `7E28` | 25 kHz mode, demod gain bit flipped (6 dB step) |
+  | `7E0C` | 12.5 kHz mode: more audio per kHz of deviation, but wide FSK clips sooner |
+  | `7E08` | 12.5 kHz mode, demod gain bit flipped |
+
+- `TOYT 40/72` is the most bits one Toyota sync has decoded, out of the 72 in a
+  frame, since the last retune. Noise alone seldom gets past about 12.
+
+How to read it, with a Toyota sensor woken next to the radio:
+
+| `TOYT` count | Meaning | Try |
+|---|---|---|
+| Stays near 0–12 | No Toyota preamble heard | Check the band. Step the offset, then the presets |
+| Rises to 20–70 | Bursts are heard but break up | Step the offset 5 kHz either way, then try `7E28` and `7E0C` |
+| Reaches 72, no row | Whole frames decode but fail the CRC | Bit errors near the end, or a sensor that only looks like this Toyota format. Step the offset and presets |
+| A `TOYT` row appears | Working | Note the offset and preset that worked |
+
+The decoder follows rtl_433's "Toyota TPMS" (Pacific PMV-C210, as in the Auris
+and Corolla): 52 µs chips. The Pacific PMV-107J used on many US Toyotas at
+315 MHz is a different format (100 µs chips, 66 bits) and is not decoded.
 
 Close any screen capture (UV Studio or K5Viewer over the K-plug) while you
 listen. The app sends the viewer a frame every half second, and on the

@@ -116,6 +116,9 @@ typedef struct {
     uint8_t  mode, state, inv, level, half;
     uint8_t  gate;         /* signal gate (HYST): lower hears weaker bursts */
     uint8_t  raw[40];      /* collected payload bits, MSB first packing */
+    /* Toyota test counter, cleared by dectpms_init: the most bits (of 72)
+     * one sync decoded. note is set when it rises; the app clears it. */
+    uint8_t  ty_best, note;
 } dectpms_t;
 
 /**

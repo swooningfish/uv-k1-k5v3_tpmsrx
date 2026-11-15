@@ -313,6 +313,8 @@ static void test_nis_chain(void)
 }
 
 static unsigned rng_state;
+/* Toyota test counter of the slicer after the last feed(). */
+static uint8_t last_ty_best;
 /* Samples stalled by the RSSI read in feed(); 0 for none. */
 static unsigned stall_samples;
 
@@ -379,6 +381,7 @@ static int feed(uint8_t mode, const uint8_t *chips, unsigned n, double us,
             stall_end = 0;
         }
     }
+    last_ty_best = d.ty_best;
     return hits;
 }
 
@@ -460,6 +463,23 @@ static void test_fsk_samples(void)
         ok = phases_ok(TPMS_MODE_FSK, tc, nt, 52, inv, TPMS_TOYT, 0x00F211A9u);
         snprintf(msg, sizeof msg, "toyota samples, polarity %d: %d/5", inv, ok);
         expect(ok >= 4, msg);
+    }
+
+    /* A Toyota frame with a bad CRC gives no packet, but the test counter
+       still shows that all 72 bits decoded after the sync. Flipping the
+       second chip of the last CRC bit, and every trailer chip after it,
+       flips that bit and keeps the differential clock intact. */
+    {
+        tpms_pkt_t o;
+        unsigned i = nt - 3u - 2u;
+        tc[i + 1u] = (uint8_t)!tc[i + 1u];
+        tc[i + 2u] = (uint8_t)!tc[i + 2u];
+        tc[i + 3u] = (uint8_t)!tc[i + 3u];
+        tc[i + 4u] = (uint8_t)!tc[i + 4u];
+        rng_state = 11u;
+        memset(&o, 0, sizeof o);
+        expect(!feed(TPMS_MODE_FSK, tc, nt, 52, 0.0, 0, &o), "toyota bad crc: no packet");
+        expect(last_ty_best == 72u, "toyota bad crc: test counter reaches 72");
     }
 }
 

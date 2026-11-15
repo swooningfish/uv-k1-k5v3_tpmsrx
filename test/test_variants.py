@@ -44,14 +44,14 @@ def flavour_ui(flavour: str) -> dict[str, str]:
     # Re-exec the same mapping without importing the SDK Assets class.
     regions = {"eu": "UK/EU", "na": "US/CA", "eu2": "UK/EU", "na2": "US/CA"}
     cars = {
-        "eu": ("FSK: FORD|TOYOTA", "V1.3.1"),
-        "na": ("FSK: FORD|TOYOTA", "V1.3.1"),
+        "eu": ("FSK: FORD|TOYOTA", ""),
+        "na": ("FSK: FORD|TOYOTA", ""),
         "eu2": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI|SCHRADER"),
         "na2": ("OOK: CHEVROLET|GM|SCHRADER", "OOK: SUBARU|NISSAN"),
     }
     hints = {
-        "eu": "1 SPK  2 BAND  0 LIGHT",
-        "na": "1 SPK  2 BAND  0 LIGHT",
+        "eu": "1 SPK 2 BAND * IF 0 LIGHT",
+        "na": "1 SPK 2 BAND * IF 0 LIGHT",
         "eu2": "1 SPK  0 LIGHT",
         "na2": "1 SPK  0 LIGHT",
     }
@@ -122,15 +122,19 @@ def test_layout_source() -> None:
     print("Main-list layout (tpmsrx_app.c)")
     src = read("tpmsrx_app.c")
     check("drawListHints" in src, "drawListHints helper")
-    check("tiny(str, x, 49, o)" in src, "key hints use body line 6 (y=49)")
-    check("tiny(str, x, 57, o)" not in src, "key hints stay inside the 56 px body")
+    check("T_HINT, HINT_X, 49," in src, "key hints use body line 6 (y=49)")
+    check(", 57, " not in src, "key hints stay inside the 56 px body")
     check("T_HINT" in src and "T_HINT1" not in src and "T_HINT2" not in src,
           "uses single T_HINT strip")
-    check('put(str, ui + T_WAIT)' in src and "putBand(o)" in src and "T_REGION" in src,
+    check('put(str, ui + T_WAIT)' in src and "putBand(o, ui)" in src and "T_REGION" in src,
           "LISTENING line merges band and region")
     check("g.nRows <= 3u" in src, "free-row hints when 0–3 sensors")
     check("tinyCenter(str, 8, o)" in src and "ui + T_CARS;" in src and "y = 16;" in src,
           "listening and cars shifted up")
+    check("tinyCenter(str, 24, o)" in src and "dec->ty_best" in src and "T_TYEND" in src,
+          "FSK test line on the blank second car row")
+    check("IF_PRESET[g.cfg.ifp]" in src and "foffSteps() * FOFF_STEP" in src,
+          "FSK IF preset and tuning offset reach applyRf")
     check("LIGHT_ICON" in src and "if (g.cfg.disp != DISP_ON) return;" in src,
           "status bulb only while the force backlight option is on")
 
@@ -145,9 +149,9 @@ def test_assets_and_flavours() -> None:
         ui = flavour_ui(fl)
         check(ui["hint"] in assets, f"{fl} hint text in gen_assets")
         check(ui["region"] in assets, f"{fl} region in gen_assets")
-        # FSK apps show the app version (VER) on the second car line.
+        # FSK apps leave the second car line blank for the Toyota test line.
         if ui["mode"] == "FSK":
-            cars2_ok = f'rows("{ui["cars1"]}", VER)' in assets
+            cars2_ok = f'rows("{ui["cars1"]}", "")' in assets
         else:
             cars2_ok = f'rows("{ui["cars1"]}", "{ui["cars2"]}")' in assets
         check(cars2_ok, f"{fl} car lines in gen_assets")
@@ -156,8 +160,10 @@ def test_assets_and_flavours() -> None:
         check('"PSI MAY BE WRONG: CHECK GAUGE"' in assets
               and '"DRIVER IS RESPONSIBLE"' in assets,
               f"{fl} safety warning rows on the listening screen")
-        # Every app has one demod, so no hint offers a mode key.
-        check("*" not in ui["hint"] and "MODE" not in ui["hint"], f"{fl} hints omit mode")
+        # Every app has one demod, so no hint offers a mode key. STAR is the
+        # IF preset in the FSK apps and unused in the OOK apps.
+        check("MODE" not in ui["hint"], f"{fl} hints omit mode")
+        check(("* IF" in ui["hint"]) == (ui["mode"] == "FSK"), f"{fl} IF key only on FSK")
         # Headline length fits 128 px tiny font (4 px/glyph).
         check(len(ui["listen"]) * 4 <= 128, f"{fl} listening line fits width: {ui['listen']}")
         # Locked flavours must not advertise dead band/mode keys.

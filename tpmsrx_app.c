@@ -101,6 +101,11 @@ static const uint8_t LIGHT_ICON[9] = {
     0x0Cu, 0x12u, 0x21u, 0x6Du, 0x79u, 0x6Du, 0x21u, 0x12u, 0x0Cu
 };
 
+/* Speaker: box, cone, one sound wave. 7 status columns, LSB is the top pixel. */
+static const uint8_t SPK_ICON[7] = {
+    0x1Cu, 0x1Cu, 0x3Eu, 0x7Fu, 0x00u, 0x22u, 0x1Cu
+};
+
 typedef struct {
     uint32_t id;
     uint32_t t;
@@ -455,7 +460,7 @@ static void drawLight(uint8_t bandX)
 }
 
 /**
- * Draw the status line: title, bulb, band, demod, and speaker mark.
+ * Draw the status line: title, bulb, band, demod, and speaker icon.
  *
  * @param ui Packed UI strings for this flavour.
  */
@@ -464,6 +469,7 @@ static void drawStatus(const char *ui)
     char str[20];
     char *o;
     unsigned width;
+    uint8_t bandX;
     g.A->status_clear();
     g.A->draw_battery();
     g.A->print_inverse(ui + (g.menu ? T_MENU : T_TITLE), 2, 0, true, true,
@@ -471,18 +477,20 @@ static void drawStatus(const char *ui)
     o = putBand(str);
     *o++ = ' ';
     o = put(o, modeLabel(ui));
-    /* Always reserve the speaker slot so the band and bulb never shift. */
+    /* Always reserve 8 px for the speaker icon so the band and bulb never shift. */
     *o++ = ' ';
-    *o++ = g.spk ? 'S' : ' ';
+    *o++ = ' ';
     *o = '\0';
+    /* Band (6), demod (3) and both slots are always 12 cells, 48 px, so the
+       text fits between the title capsule and the 48 px battery reserve. */
     width = (unsigned)(o - str) * 4u;
-    /* 22 px clears the title capsule. 48 px covers the battery icon plus text. */
-    if (width + 22u + BATT_RESERVE <= 128u) {
-        uint8_t bandX = (uint8_t)(128u - BATT_RESERVE - width);
-        g.A->print_tiny(str, bandX, 1, true, true);
-        drawLight(bandX);
-    } else
-        g.A->print_tiny(str, 2, 1, false, true);
+    bandX = (uint8_t)(128u - BATT_RESERVE - width);
+    g.A->print_tiny(str, bandX, 1, true, true);
+    drawLight(bandX);
+    /* The icon fills the slot that ends where the band text ends. */
+    if (g.spk && g.A->status_line)
+        memcpy(g.A->status_line + (128u - BATT_RESERVE) - sizeof SPK_ICON,
+               SPK_ICON, sizeof SPK_ICON);
 }
 
 /**

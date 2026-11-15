@@ -401,8 +401,13 @@ static void spikeTick(void)
     g.rbQ += (r - g.rbQ) >> ((now - g.t0 < SEED_MS) ? 2 : 6);
 }
 
+/* Speaker: box, cone, one sound wave. 7 status columns, LSB is the top pixel. */
+static const uint8_t SPK_ICON[7] = {
+    0x1Cu, 0x1Cu, 0x3Eu, 0x7Fu, 0x00u, 0x22u, 0x1Cu
+};
+
 /**
- * Draw the status line: DBG, band, demod, speaker, and battery.
+ * Draw the status line: DBG, band, demod, speaker icon, and battery.
  */
 static void drawStatus(void)
 {
@@ -422,12 +427,15 @@ static void drawStatus(void)
     }
     *o++ = ' ';
     *o++ = (char)(g.fsk ? 'F' : 'O');
-    /* Always reserve the speaker slot so the band never shifts. */
+    /* Always reserve 8 px for the speaker icon so the band never shifts. */
     *o++ = ' ';
-    *o++ = g.spk ? 'S' : ' ';
+    *o++ = ' ';
     *o = '\0';
-    w =(unsigned)(o - str) * 4u;
+    w = (unsigned)(o - str) * 4u;
     g.A->print_tiny(str, (uint8_t)(128u - 48u - w), 1, true, true);
+    /* The icon ends where the band text ends, just left of the battery. */
+    if (g.spk && g.A->status_line)
+        memcpy(g.A->status_line + (128u - 48u) - sizeof SPK_ICON, SPK_ICON, sizeof SPK_ICON);
 }
 
 /**

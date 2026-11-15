@@ -287,21 +287,45 @@ def light_icon(fb, band_x, cap_end):
                 px(fb, x + col, row, 1)
 
 
-def status(fb, title, band, light=True):
-    """Draw the title capsule, band, bulb, and battery.
+# Speaker: box, cone, one sound wave. Same columns as SPK_ICON in the apps.
+_SPEAKER = (0x1C, 0x1C, 0x3E, 0x7F, 0x00, 0x22, 0x1C)
+
+
+def speaker_icon(fb, end):
+    """Draw the speaker icon ending at the right edge of the band text.
+
+    @param fb Framebuffer, row-major.
+    @param end Pixel just past the band text.
+    """
+    x = end - len(_SPEAKER)
+    for col, bits in enumerate(_SPEAKER):
+        for row in range(8):
+            if bits & (1 << row):
+                px(fb, x + col, row, 1)
+
+
+def status(fb, title, band, light=True, spk=False):
+    """Draw the title capsule, band, bulb, speaker, and battery.
+
+    Two blank cells are always kept after the band for the speaker icon,
+    as drawStatus() does, so the layout does not move when it toggles.
 
     @param fb Framebuffer, row-major.
     @param title Title text inside the capsule.
     @param band Band and demod text.
     @param light True when the bulb is shown.
+    @param spk True when the speaker icon is shown.
     """
     cap_end = 2 + len(title) * 4
     inverse(fb, title, 2, 0, cap_end, True)
+    band += "  "
     width = len(band) * 4
     band_x = 128 - 48 - width
     text(fb, band_x, 1, band)
     if light:
         light_icon(fb, band_x, cap_end)
+    if spk:
+        speaker_icon(fb, band_x + width)
     battery(fb)
 
 
@@ -397,17 +421,17 @@ DBG_SCENES = {
         (16, "B96 5556A1B2C3D45A69"),
         (24, "T80 Rb-98 W3 M3 L2"),
     )),
-    "dbg_wiz_hiss": ("433.92 F S", (
+    "dbg_wiz_hiss": ("433.92 F", (
         (0, "SPEAKER ON. HEAR HISS?"),
         (32, " > YES    NO"),
         (48, "ARROWS PICK, MENU OK"),
     )),
-    "dbg_wiz_wake": ("433.92 F S", (
+    "dbg_wiz_wake": ("433.92 F", (
         (0, "WAKE A SENSOR NOW"),
         (8, "MENU WHEN DONE"),
         (32, "W1 N0  21S LEFT"),
     )),
-    "dbg_wiz_verdict": ("433.92 F S", (
+    "dbg_wiz_verdict": ("433.92 F", (
         (0, "RF SEEN, SLICER MISSED IT"),
         (8, "PRESS * FOR FSK/OOK, RETRY"),
         (48, "MENU OR EXIT TO CLOSE"),
@@ -415,15 +439,16 @@ DBG_SCENES = {
 }
 
 
-def scene_dbg(band, rows):
+def scene_dbg(band, rows, spk=False):
     """Draw one TPMS DBG screen.
 
-    @param band Status-line band, demod, and speaker text.
+    @param band Status-line band and demod text.
     @param rows Pairs of body pixel row and text.
+    @param spk True when the speaker icon is shown.
     @return The framebuffer.
     """
     fb = new_fb()
-    status(fb, "DBG", band, light=False)
+    status(fb, "DBG", band, light=False, spk=spk)
     for y, s in rows:
         text(fb, 0, 8 + y, s)
     return fb
@@ -495,7 +520,8 @@ def main():
         written.extend([w, m])
     for key, (band, rows) in DBG_SCENES.items():
         d = f"docs/{key}.png"
-        write_png(os.path.join(root, d), scene_dbg(band, rows))
+        # The wizard turns the speaker on, so its screens show the icon.
+        write_png(os.path.join(root, d), scene_dbg(band, rows, key.startswith("dbg_wiz")))
         written.append(d)
     print("wrote " + " ".join(written))
 

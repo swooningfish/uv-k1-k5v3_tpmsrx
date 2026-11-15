@@ -103,7 +103,7 @@ On F4HWN Labs, load and manage overlay apps in the browser at
 | `2` | Toggle 315.00 / 433.92 MHz. No effect in `TPMS EU2` |
 | `*` | Cycle demod: FSK, OOK, AUTO. No effect in `TPMS EU2` or `TPMS NA2` |
 | `0` | Turn the backlight off and hide the status bulb. The screen stays drawn. Any key lights it again for 10 seconds and shows the bulb. `EXIT` still quits |
-| `1` | Speaker on or off. `S` shows on the status line while it is on |
+| `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
 | `EXIT` | Quit (from the listen screen) or close the menu |
 
 `1` sends the same audio the decoder hears to the speaker. Hiss means the
@@ -152,8 +152,8 @@ The status line shows `TPMS` (or `MENU`) on the left, a light bulb while the
 backlight is lit, the band and demod just left of the battery, and the
 battery percent plus icon on the right (same F4HWN / Temp 433 status battery).
 The bulb goes when the light times out or `0` turns it off, and comes back
-with the light on the next key. An `S` after the demod means the speaker is
-on. Its space is always kept, so the status line does not move.
+with the light on the next key. A speaker icon after the demod means the
+speaker is on. Its space is always kept, so the status line does not move.
 
 While no sensors have been heard, the listening line is
 `LISTENING <band> <region>`, then the car / protocol lines, then free-row

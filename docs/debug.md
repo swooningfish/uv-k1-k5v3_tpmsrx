@@ -37,8 +37,8 @@ After three bursts:
 
 ![TPMS DBG after bursts](dbg_burst.png)
 
-The status line shows `DBG`, the band, `F` or `O` for the demod, and `S`
-while the speaker is on. Under it are four rows:
+The status line shows `DBG`, the band, `F` or `O` for the demod, and a
+speaker icon while the speaker is on. Under it are four rows:
 
 | Row | Format | Meaning |
 |---|---|---|

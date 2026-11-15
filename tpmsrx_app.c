@@ -92,6 +92,10 @@ void *memset(void *d, int c, size_t n)
 #define DISP_OFF       1u
 #define DISP_TMO       2u
 #define DISP_IDLE_MS   10000u
+/* Radio backlight time in storage (gEeprom.BACKLIGHT_TIME, firmware v6.3.0
+ * settings block 0xA008 byte 5). 0 keeps the lamp off, 61 is always on. */
+#define BL_TIME_ADDR   0x00A00Du
+#define BL_ALWAYS      61u
 #define BATT_RESERVE   48u
 /* print_inverse paints the title capsule through this x (end pixel inclusive). */
 #define TITLE_CAP_END  (2u + T_TITLE_CHARS * 4u)
@@ -124,6 +128,7 @@ typedef struct {
 static struct {
     const app_api_t *A;
     uint8_t prevKey, led, nRows, drawDue, menu, menuSel, blOff, path, spk;
+    uint8_t blTime;   /* radio backlight time: 0 off, BL_ALWAYS on, else timed */
     uint16_t ledCnt, keyCnt;
     int16_t rssi;
     uint32_t autoAt, lastHit, lastKey;
@@ -444,6 +449,8 @@ static void upsert(const tpms_pkt_t *p, int16_t rssi)
  *
  * The bulb sits between the title capsule and the band.
  * It hides when the idle timeout turns the lamp off, and after the 0 key.
+ * It follows the radio backlight setting when the firmware can read it:
+ * never shown when that is OFF, always shown when it is always on.
  *
  * @param bandX Left edge of the band text, in pixels.
  */
@@ -451,7 +458,10 @@ static void drawLight(uint8_t bandX)
 {
     uint8_t *line;
     unsigned gap;
-    if (g.cfg.disp != DISP_TMO || g.blOff) return;
+    /* Radio backlight OFF: BACKLIGHT_TurnOn never lights the lamp. */
+    if (!g.blTime) return;
+    /* Always on: the lamp stays lit after the idle timeout and the 0 key. */
+    if (g.blTime != BL_ALWAYS && (g.cfg.disp != DISP_TMO || g.blOff)) return;
     if (bandX < TITLE_CAP_END + 2u + sizeof LIGHT_ICON) return;
     line = g.A->status_line;
     if (!line) return;
@@ -893,6 +903,9 @@ void app_main(const app_api_t *api)
     g.blOff = 0;
     g.spk = 0;
     g.cfg.disp = DISP_TMO;
+    /* Unknown (no storage read on this firmware) keeps the timed behaviour. */
+    g.blTime = 1u;
+    if (api->sys_storage_read) api->sys_storage_read(BL_TIME_ADDR, &g.blTime, 1);
     api->led(false);
     api->asset_read(0, ui, UI_SIZE);
 

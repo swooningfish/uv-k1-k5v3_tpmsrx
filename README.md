@@ -152,7 +152,10 @@ The status line shows `TPMS` (or `MENU`) on the left, a light bulb while the
 backlight is lit, the band and demod just left of the battery, and the
 battery percent plus icon on the right (same F4HWN / Temp 433 status battery).
 The bulb goes when the light times out or `0` turns it off, and comes back
-with the light on the next key. A speaker icon after the demod means the
+with the light on the next key. On firmware that lets apps read settings
+(F4HWN Labs with overlay info), the bulb also follows the radio's own
+backlight setting: it never shows when that is OFF, because the light never
+comes on, and it always shows when that is set to always on. A speaker icon after the demod means the
 speaker is on. Its space is always kept, so the status line does not move.
 
 While no sensors have been heard, the listening line is

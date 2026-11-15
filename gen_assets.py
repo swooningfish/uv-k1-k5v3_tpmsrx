@@ -26,13 +26,13 @@ UI = [
             ("T_FORD", "FORD"), ("T_TOYT", "TOYT"),
             ("T_REGION", "UK/EU"),
             ("T_CARS1", "FSK: FORD|TOYOTA"),
-            ("T_CARS2", "SCHRADER: USE TPMS EU2"),
+            ("T_CARS2", VER),
         ],
         "na": [
             ("T_FORD", "FORD"), ("T_TOYT", "TOYT"),
             ("T_REGION", "US/CA"),
             ("T_CARS1", "FSK: FORD|TOYOTA"),
-            ("T_CARS2", "SCHRADER: USE TPMS NA2"),
+            ("T_CARS2", VER),
         ],
         "eu2": [
             ("T_EG53", "EG53"), ("T_BMW", "BMW"), ("T_SCHR", "SCHR"),
@@ -59,7 +59,7 @@ UI = [
         "eu": [("T_HINT", "2 BAND  0 LIGHT")],
         "na": [("T_HINT", "2 BAND  0 LIGHT")],
         "eu2": [("T_HINT", "0 LIGHT")],
-        "na2": [("T_HINT", "2 BAND  0 LIGHT")],
+        "na2": [("T_HINT", "0 LIGHT")],
     }[os.environ.get("FLAVOUR", "eu")],
 ]
 a = Assets("TPMS_RX")
@@ -70,7 +70,7 @@ for name, value in UI:
     ui_size += len(value) + 1 + pad
 a.const("UI_SIZE", ui_size)
 a.const("T_TITLE_CHARS", len(TITLE))
-# EU2: CLEAR only (fixed 433.92). EU / NA / NA2: BAND + CLEAR.
+# EU2 / NA2: CLEAR only (fixed band). EU / NA: BAND + CLEAR.
 _flavour = os.environ.get("FLAVOUR", "eu")
-a.const("MENU_ITEMS", {"eu2": 1}.get(_flavour, 2))
+a.const("MENU_ITEMS", {"eu2": 1, "na2": 1}.get(_flavour, 2))
 a.main()

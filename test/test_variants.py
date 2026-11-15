@@ -44,8 +44,8 @@ def flavour_ui(flavour: str) -> dict[str, str]:
     # Re-exec the same mapping without importing the SDK Assets class.
     regions = {"eu": "UK/EU", "na": "US/CA", "eu2": "UK/EU", "na2": "US/CA"}
     cars = {
-        "eu": ("FSK: FORD|TOYOTA", "SCHRADER: USE TPMS EU2"),
-        "na": ("FSK: FORD|TOYOTA", "SCHRADER: USE TPMS NA2"),
+        "eu": ("FSK: FORD|TOYOTA", "V1.3.0"),
+        "na": ("FSK: FORD|TOYOTA", "V1.3.0"),
         "eu2": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI|SCHRADER"),
         "na2": ("OOK: CHEVROLET|GM|SCHRADER", "OOK: SUBARU|NISSAN"),
     }
@@ -53,7 +53,7 @@ def flavour_ui(flavour: str) -> dict[str, str]:
         "eu": "2 BAND  0 LIGHT",
         "na": "2 BAND  0 LIGHT",
         "eu2": "0 LIGHT",
-        "na2": "2 BAND  0 LIGHT",
+        "na2": "0 LIGHT",
     }
     band = "433.92" if flavour in ("eu", "eu2") else "315.00"
     mode = "OOK" if flavour in ("eu2", "na2") else "FSK"
@@ -138,7 +138,12 @@ def test_assets_and_flavours() -> None:
         ui = flavour_ui(fl)
         check(ui["hint"] in assets, f"{fl} hint text in gen_assets")
         check(ui["region"] in assets, f"{fl} region in gen_assets")
-        check(ui["cars1"] in assets and ui["cars2"] in assets, f"{fl} car lines in gen_assets")
+        # FSK apps show the app version (VER) on the second car line.
+        if ui["mode"] == "FSK":
+            cars2_ok = '("T_CARS2", VER)' in assets
+        else:
+            cars2_ok = ui["cars2"] in assets
+        check(ui["cars1"] in assets and cars2_ok, f"{fl} car lines in gen_assets")
         check(len(ui["cars1"]) * 4 <= 128 and len(ui["cars2"]) * 4 <= 128,
               f"{fl} car lines fit width")
         # Every app has one demod, so no hint offers a mode key.
@@ -146,8 +151,8 @@ def test_assets_and_flavours() -> None:
         # Headline length fits 128 px tiny font (4 px/glyph).
         check(len(ui["listen"]) * 4 <= 128, f"{fl} listening line fits width: {ui['listen']}")
         # Locked flavours must not advertise dead band/mode keys.
-        if fl == "eu2":
-            check("2 BAND" not in ui["hint"], "eu2 hints omit band")
+        if fl in ("eu2", "na2"):
+            check("2 BAND" not in ui["hint"], f"{fl} hints omit band")
     check("T_AUTO" not in assets and "T_MODE" not in assets, "no AUTO or MODE strings")
     hdr = read("dectpms.h")
     m = re.search(r"TPMS_FLAVOUR_EU2\) \|\| defined\(TPMS_FLAVOUR_NA2\)\n"

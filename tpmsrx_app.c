@@ -71,9 +71,15 @@ void *memset(void *d, int c, size_t n)
 #else
 #define TPMS_PATH      TPMS_MODE_OOK
 #endif
-/* EU2: fixed 433.92. The others can change band. */
+/* EU2 is fixed at 433.92 and NA2 at 315.00, so neither shows BAND.
+ * EU / NA can change band. */
 #if defined(TPMS_FLAVOUR_EU2)
 #define TPMS_LOCK_BAND 1
+#define TPMS_BAND433   1u
+#define MENU_CLR       0u
+#elif defined(TPMS_FLAVOUR_NA2)
+#define TPMS_LOCK_BAND 1
+#define TPMS_BAND433   0u
 #define MENU_CLR       0u
 #else
 #define TPMS_LOCK_BAND 0
@@ -799,7 +805,7 @@ void app_main(const app_api_t *api)
     r2b = api->bk_read(REG_2B);
 
     /* Defaults per flavour (first launch). The saved band is restored when
-     * present, then EU2 forces 433.92 where its sensors are. Byte 2 held the
+     * present, then EU2 forces 433.92 and NA2 forces 315.00. Byte 2 held the
      * old demod choice and is ignored: each app has one demod now. */
     api->cfg_load(cfg, 4);
     if (cfg[0] == CFG_MAGIC || cfg[0] == 0xB1u) {
@@ -813,7 +819,7 @@ void app_main(const app_api_t *api)
 #endif
     }
 #if TPMS_LOCK_BAND
-    g.cfg.band433 = 1u;
+    g.cfg.band433 = TPMS_BAND433;
 #endif
     if (g.cfg.disp == DISP_OFF) g.blOff = 1;
     else api->backlight_on();

@@ -68,7 +68,7 @@ installed side by side, one per free slot.
 | `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
 | `2` | Switch between 315.00 and 433.92 MHz (`TPMS EU` and `TPMS NA` only) |
 | `0` | Backlight off. The screen stays drawn and decoding carries on. Any key lights it again for 10 seconds |
-| `EXIT` | Quit, or close the menu |
+| `EXIT` | Quit, or close the menu. With the backlight off, the first press only lights the screen |
 
 With the speaker on you hear what the decoder hears. Hiss means the receiver
 is working, and a short rasp or click is a sensor sending. Silence means the
@@ -119,6 +119,13 @@ TOYT 00F211A9 28psi 1C -72 12s
 Each row is: model, id, pressure in whole PSI, temperature in whole °C,
 signal in dBm, and age (seconds, then minutes, then hours). Models are
 `FORD`, `TOYT`, `SCHR`, `EG53`, `BMW` and `NISS`. `NISS` has no temperature.
+The id has as many hex digits as the sensor sends, as rtl_433 prints it: 8 for
+`FORD` and `TOYT`, 7 for `SCHR`, and 6 for the rest. A row that would be wider
+than the screen, such as `-12C -105 45s`, drops the space after the
+temperature (`-12C-105 45s`).
+
+On `TPMS EU2` and `TPMS NA2` the signal is read about 2 ms into the burst,
+while the sensor is still sending.
 
 Drawing the screen pauses decoding, so the list only redraws on a key press
 or 200 ms after a decode. Ages are as of the last redraw.

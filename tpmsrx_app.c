@@ -94,6 +94,10 @@ void *memset(void *d, int c, size_t n)
 #define BL_TIME_ADDR   0x00A00Du
 #define BL_ALWAYS      61u
 #define BATT_RESERVE   48u
+/* OOK chip (120 us) at which RSSI is read: about 2 ms into the burst. */
+#define RSSI_CHIP      16u
+/* Visible characters on one 128 px row of 4 px tiny glyphs. */
+#define ROW_CHARS      32
 /* print_inverse paints the title capsule through this x (end pixel inclusive). */
 #define TITLE_CAP_END  (2u + T_TITLE_CHARS * 4u)
 
@@ -199,15 +203,16 @@ static char *puti(char *o, int32_t v)
 }
 
 /**
- * Append eight uppercase hex digits.
+ * Append the low digits of a value as uppercase hex.
  *
  * @param o Cursor to write at.
- * @param v Value, printed in full 32 bits.
+ * @param v Value to print.
+ * @param digits Number of hex digits, 1 to 8.
  * @return Cursor after the digits.
  */
-static char *putHex8(char *o, uint32_t v)
+static char *putHex(char *o, uint32_t v, uint8_t digits)
 {
-    for (int i = 7; i >= 0; i--) {
+    for (int i = (int)digits - 1; i >= 0; i--) {
         uint8_t n = (uint8_t)((v >> (i * 4)) & 0xfu);
         *o++ = (char)(n < 10u ? (char)('0' + n) : (char)('A' + (n - 10u)));
     }
@@ -355,6 +360,24 @@ static const char *modelName(uint8_t m, const char *ui)
 #endif
     (void)m;
     return ui;
+}
+
+/**
+ * Hex digits a sensor model's id needs, as rtl_433 prints them.
+ *
+ * Ford and Toyota ids are 32 bits, Schrader MRXGG4 28, the rest 24.
+ *
+ * @param m TPMS_FORD or one of the other model ids.
+ * @return 8, 7, or 6.
+ */
+static uint8_t idDigits(uint8_t m)
+{
+#if TPMS_HAVE_FSK
+    (void)m;
+    return 8u;
+#else
+    return m == TPMS_SCHR ? 7u : 6u;
+#endif
 }
 
 /**
@@ -517,7 +540,8 @@ static void drawListHints(const char *ui)
 __attribute__((noinline))
 static void draw(const char *ui)
 {
-    char str[34];
+    /* Widest row: model, 8-digit id, six int16 or age fields, and units. */
+    char str[48];
     char *o;
     uint32_t now = g.A->ticks_ms();
 
@@ -556,9 +580,10 @@ static void draw(const char *ui)
     }
     for (uint8_t i = 0; i < g.nRows && i < ROWS; i++) {
         const row_t *r = &g.rows[i];
+        char *sp;
         o = put(str, modelName(r->model, ui));
         *o++ = ' ';
-        o = putHex8(o, r->id);
+        o = putHex(o, r->id, idDigits(r->model));
         *o++ = ' ';
         o = puti(o, r->psi);
         o = put(o, ui + T_PSI);
@@ -567,10 +592,18 @@ static void draw(const char *ui)
             o = puti(o, r->temp_c);
             o = put(o, ui + T_C);
         }
+        sp = o;
         *o++ = ' ';
         o = puti(o, r->rssi);
         *o++ = ' ';
         o = putAge(o, now - r->t);
+        /* A cold, weak row ("-12C -105 45s") is one cell too wide for the
+           screen. The C unit already ends the temperature, so drop the space
+           after it. Shift left one char at a time: the ranges overlap. */
+        if (o - str > ROW_CHARS && r->temp_c != (int16_t)TPMS_NO_TEMP) {
+            for (char *p = sp; p + 1 < o; p++) p[0] = p[1];
+            o--;
+        }
         tiny(str, 0, (uint8_t)(8u + i * 6u), o);
     }
     /* Key strip on the MENU baseline when the list is short. */
@@ -616,10 +649,14 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
 {
     g.lastKey = g.A->ticks_ms();
     if (g.blOff && !g.menu) {
-        if (key == APP_KEY_EXIT) return true;
+        /* EXIT on a dark screen only wakes it, so a press to see the list
+           does not quit. With the radio backlight always on the screen is
+           never dark, so EXIT quits straight away. */
+        if (key == APP_KEY_EXIT && g.blTime == BL_ALWAYS) return true;
         g.blOff = 0;
         if (g.cfg.disp == DISP_OFF) g.cfg.disp = DISP_TMO;
-        if (key == APP_KEY_0) return false; /* toggle consumed as wake */
+        /* 0 toggle and EXIT are consumed as the wake */
+        if (key == APP_KEY_0 || key == APP_KEY_EXIT) return false;
         /* fall through so other keys still act */
     }
 
@@ -711,6 +748,9 @@ static void listen(const char *ui)
     uint16_t (*const sample)(void) = g.A->af_capture_sample;
     uint32_t next = clk();
     bool wantUi = true;
+#if !TPMS_HAVE_FSK
+    bool rssiDue = true;
+#endif
     g.lastHit = 0;
     g.lastKey = g.A->ticks_ms();
 
@@ -719,8 +759,19 @@ static void listen(const char *ui)
         next += CYC_PER_SAMPLE;
         uint16_t x = sample();
         tpms_pkt_t pkt;
-        if (!g.menu && dectpms_push(&dec, x, &pkt)) {
+#if !TPMS_HAVE_FSK
+        /* OOK frames finish after the carrier drops, when RSSI is back at
+           the floor, so read it once while the burst is still on air. */
+        if (dec.bitn < RSSI_CHIP) rssiDue = true;
+        else if (rssiDue) {
+            rssiDue = false;
             g.rssi = g.A->rssi_dbm();
+        }
+#endif
+        if (!g.menu && dectpms_push(&dec, x, &pkt)) {
+#if TPMS_HAVE_FSK
+            g.rssi = g.A->rssi_dbm();
+#endif
             upsert(&pkt, g.rssi);
             g.led = 2u;
             g.ledCnt = 0;
@@ -782,7 +833,7 @@ void app_main(const app_api_t *api)
     row_t rows[ROWS];
     uint8_t cfg[4];
     char ui[UI_SIZE] __attribute__((aligned(4)));
-    uint16_t r43, r2b;
+    uint16_t r43, r2b, r73;
 
     memset(rows, 0, sizeof rows);
     g.A = api;
@@ -802,6 +853,7 @@ void app_main(const app_api_t *api)
     api->af_capture_open();
     r43 = api->bk_read(REG_43);
     r2b = api->bk_read(REG_2B);
+    r73 = api->bk_read(REG_73);
 
     /* Defaults per flavour (first launch). The saved band is restored when
      * present, then EU2 forces 433.92 and NA2 forces 315.00. Byte 2 held the
@@ -829,6 +881,7 @@ void app_main(const app_api_t *api)
 
     api->bk_write(REG_43, r43);
     api->bk_write(REG_2B, r2b);
+    api->bk_write(REG_73, r73);
     api->set_agc(true);
     api->af_capture_close();
     api->set_af(APP_AF_MUTE);

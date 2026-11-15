@@ -806,7 +806,7 @@ static void listen(void)
 __attribute__((section(".text.entry"), used))
 void app_main(const app_api_t *api)
 {
-    uint16_t r43, r2b;
+    uint16_t r43, r2b, r73;
     g.A = api;
     g.prevKey = APP_KEY_INVALID;
     g.spk = 0;
@@ -828,12 +828,14 @@ void app_main(const app_api_t *api)
     api->af_capture_open();
     r43 = api->bk_read(REG_43);
     r2b = api->bk_read(REG_2B);
+    r73 = api->bk_read(REG_73);
     rearm();
     applyRf();
     api->delay_ms(50);
     listen();
     api->bk_write(REG_43, r43);
     api->bk_write(REG_2B, r2b);
+    api->bk_write(REG_73, r73);
     api->set_agc(true);
     api->af_capture_close();
     api->set_af(APP_AF_MUTE);

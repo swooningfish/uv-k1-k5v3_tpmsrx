@@ -106,6 +106,13 @@ def test_rf_source() -> None:
         "bk_write(REG_2B, r2b)" in src and "set_agc(true)" in src,
         "restore REG_2B and AGC on exit",
     )
+    check("bk_write(REG_73, r73)" in src, "restore REG_73 (AFC) on exit")
+    check("bk_write(REG_73, r73)" in read("tpmsdbg_app.c"), "DBG restores REG_73 on exit")
+    check("RSSI_CHIP" in src and "rssiDue" in src, "OOK RSSI read while the burst is on air")
+    check("key == APP_KEY_EXIT && g.blTime == BL_ALWAYS" in src,
+          "EXIT on a dark screen wakes it instead of quitting")
+    check("idDigits(" in src and "ROW_CHARS" in src and "char str[48]" in src,
+          "sensor rows fit 32 cells and the row buffer")
     check("audio_path(g.spk" in src and "APP_KEY_1" in src, "speaker toggle on the list apps")
     check("tpms_parse_" not in src or "dectpms" in src, "list app still decodes")
 

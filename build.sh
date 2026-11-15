@@ -40,8 +40,10 @@ SETS=(
   "eu2|TPMS EU2|TPMS_FLAVOUR_EU2"
   "na2|TPMS NA2|TPMS_FLAVOUR_NA2"
 )
-# dbg is the burst recorder. A flavour name builds that app only.
+# dbg is the burst recorder, cap the K-plug capture app. A flavour name
+# builds that app only.
 WANT_DBG=0
+WANT_CAP=0
 if [ "${1:-}" != "" ]; then
   want="$1"
   SETS=()
@@ -51,10 +53,12 @@ if [ "${1:-}" != "" ]; then
     eu2) SETS=("eu2|TPMS EU2|TPMS_FLAVOUR_EU2") ;;
     na2) SETS=("na2|TPMS NA2|TPMS_FLAVOUR_NA2") ;;
     dbg) WANT_DBG=1 ;;
+    cap) WANT_CAP=1 ;;
     *) echo "unknown flavour: $want"; exit 1 ;;
   esac
 else
   WANT_DBG=1
+  WANT_CAP=1
 fi
 
 CUR=""
@@ -107,5 +111,21 @@ if [ "$WANT_DBG" = 1 ]; then
   fi
   printf '  ✅ %-12s %4d B  (%d%% of 4 KiB)  ->  %s/TPMSDBG.app\n' \
          "$CUR" "$BYTES" "$(( BYTES * 100 / 4096 ))" "$OUT_DIR"
+fi
+if [ "$WANT_CAP" = 1 ]; then
+  CUR="TPMS CAP"
+  printf '  🔨 %-12s
+' "$CUR"
+  "$CC" $CFLAGS       -nostdlib -nostartfiles -T app.ld -Wl,--defsym,APP_VMA=${APP_VMA}       -Wl,--gc-sections -Wl,-Map="${OUT_DIR}/tpms_cap.map"       -Wl,--build-id=none -Wl,--no-warn-rwx-segments       tpmscap_app.c -lgcc -o "${OUT_DIR}/tpms_cap.elf"
+  "$OBJCOPY" -O binary "${OUT_DIR}/tpms_cap.elf" "${OUT_DIR}/tpms_cap.bin"
+  "$PYTHON" "$SDK/pack_app.py" "${OUT_DIR}/tpms_cap.bin" "${OUT_DIR}/TPMSCAP.app"       --name "TPMS CAP" --ver "$APP_VER" --api-min "$APP_API_MIN"       --vma "${APP_VMA}" --shortcut none >/dev/null
+  BYTES=$(wc -c < "${OUT_DIR}/tpms_cap.bin")
+  if [ "$BYTES" -gt 4096 ]; then
+      printf '  🚨 %-12s OVERFLOWS 4 KiB (%d B)
+' "$CUR" "$BYTES"
+      exit 1
+  fi
+  printf '  ✅ %-12s %4d B  (%d%% of 4 KiB)  ->  %s/TPMSCAP.app
+'          "$CUR" "$BYTES" "$(( BYTES * 100 / 4096 ))" "$OUT_DIR"
 fi
 trap - ERR

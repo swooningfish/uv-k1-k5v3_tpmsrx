@@ -14,6 +14,9 @@ PYTHON=${PYTHON:-python3}
 echo "variant / RF / layout checks"
 "$PYTHON" "$HERE/test_variants.py"
 
+echo "kplug.html decoder (Node)"
+"$PYTHON" "$HERE/test_kplug.py"
+
 echo "style / doc-block checks"
 "$PYTHON" "$HERE/test_style.py"
 

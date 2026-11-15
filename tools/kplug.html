@@ -1,0 +1,1588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TPMS K-plug monitor</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1d2330; --muted: #5d6677; --line: #dde1e8;
+  --accent: #2459d6; --accent-ink: #ffffff; --ok: #157a3b; --warn: #9a5b00; --radio: #2459d6;
+  --bad: #b3261e; --log-bg: #fbfbfc; --pill: #eef1f6; --sel: #e8eefc;
+  --tip: #c98a00; --tip-bg: #fff6df;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11141a; --panel: #191d25; --ink: #e6e9ef; --muted: #9aa3b2; --line: #2b313d;
+    --accent: #6d97ff; --accent-ink: #0d1220; --ok: #5fd08a; --warn: #f0b45a; --radio: #8fb0ff;
+    --bad: #ff8a80; --log-bg: #141820; --pill: #232936; --sel: #22304f;
+    --tip: #f0b45a; --tip-bg: #2c2618;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11141a; --panel: #191d25; --ink: #e6e9ef; --muted: #9aa3b2; --line: #2b313d;
+  --accent: #6d97ff; --accent-ink: #0d1220; --ok: #5fd08a; --warn: #f0b45a; --radio: #8fb0ff;
+  --bad: #ff8a80; --log-bg: #141820; --pill: #232936; --sel: #22304f;
+  --tip: #f0b45a; --tip-bg: #2c2618;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 16px; }
+.grid { display: grid; grid-template-columns: 340px 1fr; gap: 16px; align-items: start; }
+.grid > div { min-width: 0; }
+@media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+  margin-bottom: 16px;
+}
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  margin: 0 0 10px; font-weight: 600; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button, select, input[type=number] {
+  font: inherit; color: var(--ink); background: var(--pill); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 11px; cursor: pointer;
+}
+input[type=number] { width: 70px; cursor: text; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+  font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; border-right: 1px solid var(--line); padding: 5px 10px; }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.seg button.wait { outline: 2px dashed var(--warn); outline-offset: -3px; }
+.ctl { display: grid; grid-template-columns: 70px 1fr; gap: 8px 10px; align-items: center; }
+.ctl .lbl { color: var(--muted); }
+.ctl > .seg { justify-self: start; }
+.offrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.slider { flex: 1; min-width: 140px; display: flex; flex-direction: column; }
+.slider input { width: 100%; accent-color: var(--accent); }
+.ticks { display: flex; justify-content: space-between; color: var(--muted); font-size: 10.5px;
+  font-variant-numeric: tabular-nums; }
+details.sweep { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+details.sweep summary { cursor: pointer; font-weight: 600; }
+details.sweep .ctl { margin: 10px 0; }
+details.sweep select, details.sweep input[type=number] { padding: 4px 6px; }
+.tablewrap { overflow-x: auto; }
+table.board td, table.board th { white-space: nowrap; }
+table.board tr.cur td { background: var(--sel); }
+table.board tr.short td { color: var(--muted); }
+table.board td.rank { font-weight: 700; }
+table.board button { padding: 2px 8px; font-size: 12px; }
+.offv { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
+  white-space: nowrap; }
+.dash { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px; }
+.dash div { background: var(--pill); border-radius: 8px; padding: 6px 4px; text-align: center; }
+.dash b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+.dash span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+@media (max-width: 420px) { .dash { grid-template-columns: repeat(3, 1fr); } }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--pill);
+  font-size: 12px; font-weight: 600; }
+.pill.on { color: var(--ok); }
+.pill.off { color: var(--muted); }
+.pill.err { color: var(--bad); }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0 0; }
+dt { color: var(--muted); }
+dd { margin: 0; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 5px 4px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+td.num, th.num { text-align: right; }
+.hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.hint.alert { color: var(--warn); }
+ol { margin: 0; padding-left: 20px; }
+ol li { margin: 3px 0; }
+code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12.5px; }
+.log {
+  background: var(--log-bg); border: 1px solid var(--line); border-radius: 8px; height: 420px;
+  overflow: auto; font: 12.5px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  padding: 6px 0; white-space: pre;
+}
+.log div { padding: 0 10px; cursor: default; }
+.log div.click { cursor: pointer; }
+.log div.sel { background: var(--sel); }
+.log .ok { color: var(--ok); font-weight: 600; }
+.log .partial { color: var(--warn); }
+.log .fail { color: var(--bad); }
+.log .hint { color: var(--ink); background: var(--tip-bg); white-space: pre-wrap; }
+.log .radio { color: var(--radio); }
+.log .settings, .log .info { color: var(--muted); }
+.log .error { color: var(--bad); }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.toolbar label { display: inline-flex; gap: 5px; align-items: center; color: var(--muted); }
+.spacer { flex: 1; }
+.tips { margin: 0; padding: 0; list-style: none; }
+.tips li { background: var(--tip-bg); border-left: 3px solid var(--tip); border-radius: 6px;
+  padding: 8px 10px; margin: 0 0 8px; }
+.tips li.old { opacity: .6; }
+.tips .empty { background: none; border: 0; padding: 0; color: var(--muted); }
+.detail { font: 12.5px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace; word-break: break-all;
+  white-space: pre-wrap; color: var(--muted); min-height: 1.5em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>TPMS K-plug monitor</h1>
+  <p class="sub">Decodes the bursts the <b>TPMS CAP</b> radio app streams over the K-plug cable:
+    Toyota (PMV-C210), Pacific PMV-107J and Ford, with the rtl_433 decoders.</p>
+
+  <div class="grid">
+    <div>
+      <section class="card">
+        <h2>Connection</h2>
+        <div class="row">
+          <button id="connect" class="primary">Connect</button>
+          <button id="disconnect" disabled>Disconnect</button>
+          <select id="baud" title="Baud rate">
+            <option value="115200" selected>115200</option>
+            <option value="38400">38400</option>
+          </select>
+          <span id="state" class="pill off">Not connected</span>
+        </div>
+        <p id="hint" class="hint"></p>
+        <dl>
+          <dt>Data</dt><dd id="rate">–</dd>
+          <dt>Stream time</dt><dd id="stime">–</dd>
+          <dt>Pauses</dt><dd id="gaps">0</dd>
+          <dt>Radio decodes</dt><dd id="rhits">0</dd>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>📻 Radio settings</h2>
+        <div class="dash">
+          <div><b id="dBand">–</b><span>Band</span></div>
+          <div><b id="dOff">–</b><span>Offset</span></div>
+          <div><b id="dIf">–</b><span>IF</span></div>
+          <div><b id="dSens">–</b><span>Sens</span></div>
+          <div><b id="dLight">–</b><span>Light</span></div>
+        </div>
+        <div class="ctl">
+          <span class="lbl">Band</span>
+          <span class="seg" id="cBand">
+            <button data-v="0">315.00</button><button data-v="1">433.92</button>
+          </span>
+          <span class="lbl">Offset<br><span id="offVal" class="offv">–</span></span>
+          <span class="offrow">
+            <button id="offDown" title="5 kHz down">−5</button>
+            <span class="slider">
+              <input id="offSlider" type="range" min="-8" max="7" step="1" value="0"
+                     list="offTicks" aria-label="Tuning offset, 5 kHz steps">
+              <span class="ticks"><span>−40</span><span>−20</span><span>0</span><span>+20</span>
+                <span>+35</span></span>
+            </span>
+            <button id="offUp" title="5 kHz up">+5</button>
+            <button id="offZero" title="Back to 0 kHz">0</button>
+          </span>
+          <datalist id="offTicks">
+            <option value="-8"></option><option value="-4"></option><option value="0"></option>
+            <option value="4"></option><option value="7"></option>
+          </datalist>
+          <span class="lbl">IF</span>
+          <span class="seg" id="cIf">
+            <button data-v="0" title="Default: 25 kHz mode">7E2C</button><button data-v="1"
+              title="25 kHz mode, demod gain bit flipped">7E28</button><button data-v="2"
+              title="12.5 kHz mode: more audio per kHz">7E0C</button><button data-v="3"
+              title="12.5 kHz mode, gain bit flipped">7E08</button>
+          </span>
+          <span class="lbl">Sens</span>
+          <span class="seg" id="cSens">
+            <button data-v="0">LOW</button><button data-v="1">MID</button><button data-v="2">HIGH</button>
+          </span>
+          <span class="lbl">Light</span>
+          <span class="seg" id="cLight">
+            <button data-v="0">Timed</button><button data-v="1">On</button>
+          </span>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <button id="cClear" title="Clear the counters on the radio screen">Clear radio counters</button>
+          <button id="cReport" title="Ask the radio to send its settings now">Refresh</button>
+        </div>
+        <p id="ctlNote" class="hint">Connect to the radio running TPMS CAP to see and change its
+          settings.</p>
+        <details class="sweep" id="sweepBox">
+          <summary>🔁 Auto sweep</summary>
+          <div class="ctl">
+            <span class="lbl">Offsets</span>
+            <span class="row"><select id="swFrom"></select> to <select id="swTo"></select></span>
+            <span class="lbl">IF</span>
+            <label><input id="swIf" type="checkbox"> all 4 presets</label>
+            <span class="lbl">Sens</span>
+            <label><input id="swSens" type="checkbox"> all 3 levels</label>
+            <span class="lbl">Time</span>
+            <label><input id="swDwell" type="number" min="5" max="600" value="30"> s each</label>
+          </div>
+          <div class="row">
+            <button id="swStart" class="primary">Start sweep</button>
+            <button id="swStop" disabled>Stop</button>
+          </div>
+          <p id="swInfo" class="hint">Each setting gets the same time, so the leaderboard
+            compares them fairly. Keep waking the sensor all through: a TPMS tool on repeat
+            works best.</p>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>Per model</h2>
+        <table>
+          <thead><tr><th>Model</th><th class="num">Shown</th><th class="num">OK</th>
+            <th class="num">Best partial</th></tr></thead>
+          <tbody id="stats"></tbody>
+        </table>
+        <p class="hint">✅ decoded and checked, ❌ whole frame but a failed check, 🟠 broke up.
+          Noise alone reaches about 12 bits (about 30 for PMV-107J); higher means real bursts
+          arrive.</p>
+      </section>
+
+      <section class="card">
+        <h2>Steps</h2>
+        <ol>
+          <li>Plug the K-plug cable into the radio and this PC.</li>
+          <li>Close UV Studio and K5Viewer: they share the cable.</li>
+          <li>Start <b>TPMS CAP</b> on the radio. It should show <code>K-PLUG 115200: KPLUG.HTML</code>.</li>
+          <li>Press <b>Connect</b> and pick the cable's port.</li>
+          <li>Wake the sensor next to the radio. Use <code>UP</code>/<code>DOWN</code>,
+            <code>*</code> and <code>3</code> on the radio to try offsets, IF presets and
+            SENS levels.</li>
+          <li>Press <b>Save capture</b> and <b>Save log</b> to send them back for debugging.</li>
+        </ol>
+      </section>
+    </div>
+
+    <div>
+      <section class="card">
+        <h2>💡 What to try</h2>
+        <ul id="tips" class="tips"><li class="empty">Hints appear here when the bursts show
+          something to tweak on the radio.</li></ul>
+      </section>
+
+      <section class="card">
+        <h2>🏆 Leaderboard</h2>
+        <div class="toolbar">
+          <label>Rank after <input id="minSec" type="number" min="5" max="600" value="15"> s</label>
+          <span class="spacer"></span>
+          <button id="boardReset" title="Start the timings and counts again">Reset</button>
+        </div>
+        <div class="tablewrap">
+          <table class="board">
+            <thead><tr><th>#</th><th>Setting</th><th class="num">Time</th>
+              <th class="num">✅/min</th><th class="num">❌/min</th><th class="num">🟠/min</th>
+              <th class="num">Best</th><th></th></tr></thead>
+            <tbody id="boardBody"><tr><td colspan="8" class="hint">Settings appear here once the
+              radio reports them.</td></tr></tbody>
+          </table>
+        </div>
+        <p class="hint">Ranked by ✅ per minute, then ❌, the best bit count and 🟠, so a short
+          and a long stay compare fairly. Settings with less time than <b>Rank after</b> are
+          listed below, unranked. The auto sweep gives each setting the same time.</p>
+      </section>
+
+      <section class="card">
+        <div class="toolbar">
+          <label>Min bits <input id="minbits" type="number" min="8" max="72" value="24"></label>
+          <label><input id="showPartial" type="checkbox" checked> 🟠❌ Partial / failed</label>
+          <label><input id="showRadio" type="checkbox" checked> 📻 Radio events</label>
+          <label><input id="showHints" type="checkbox" checked> 💡 Hints</label>
+          <label><input id="autoscroll" type="checkbox" checked> Follow</label>
+          <span class="spacer"></span>
+          <button id="clear">Clear</button>
+        </div>
+        <div id="log" class="log" aria-live="polite"></div>
+        <p class="hint">Click a burst to see its chips below (from 8 chips before the sync).</p>
+        <div id="detail" class="detail"></div>
+      </section>
+
+      <section class="card">
+        <h2>Files</h2>
+        <div class="row">
+          <button id="saveCap">Save capture (.bin)</button>
+          <button id="saveLog">Save log (.txt)</button>
+          <button id="copyLog">Copy log</button>
+          <button id="openCap">Open capture…</button>
+          <button id="selftest">Run self-test</button>
+          <input id="file" type="file" accept=".bin" hidden>
+        </div>
+        <p class="hint">A saved capture replays here with <b>Open capture…</b>, so it can be
+          sent back and checked later.</p>
+      </section>
+    </div>
+  </div>
+</main>
+
+<!-- DECODER START: the decoder, also run in Node by test/test_kplug.py -->
+<script>
+/* TPMS CAP stream decoder for the browser (and Node, for the tests).
+ *
+ * Reads the stream tpmscap_app.c sends and runs the rtl_433 decoders
+ * (tpms_toyota.c, tpms_pmv107j.c, tpms_ford.c) on it with two chip clocks:
+ * run lengths, as rtl_433 does, and the radio's own bit clock (dectpms_push).
+ * The Stream class also turns what it sees into hints on what to tweak.
+ */
+(function (root) {
+    'use strict';
+
+    const FS = 38400;
+    const BAUD = 115200;
+    const MARK_GAP = 0x80;
+    const MARK_SET = 0x81;
+    const MARK_HIT = 0x82;
+    const RADIO_MODELS = { 0: 'FORD', 1: 'TOYOTA', 2: 'SCHRADER', 3: 'EG53', 4: 'BMW', 5: 'NISSAN' };
+    const IF_PRESETS = [0x7E2C, 0x7E28, 0x7E0C, 0x7E08];
+    const OVERLAP = 800;
+    const LEAD = 64;
+    const CHUNK = FS / 2;
+    const MERGE = 40;
+    const BURST = 600;
+    const SPC_52 = FS * 52e-6;
+    const SPC_100 = FS * 100e-6;
+    const PMV_EXTRA = 16;
+
+    /** CRC-8, MSB first and not reflected. */
+    function crc8(data, poly, init) {
+        let c = init;
+        for (const b of data) {
+            c ^= b;
+            for (let i = 0; i < 8; i++) c = (c & 0x80) ? ((c << 1) ^ poly) & 0xFF : (c << 1) & 0xFF;
+        }
+        return c;
+    }
+
+    /** Pack bits MSB first into bytes. */
+    function pack(bits) {
+        const out = new Uint8Array((bits.length + 7) >> 3);
+        bits.forEach((b, i) => { if (b) out[i >> 3] |= 0x80 >> (i & 7); });
+        return out;
+    }
+
+    /** Uppercase hex of a byte array. */
+    function hex(b) {
+        return Array.from(b, (x) => x.toString(16).toUpperCase().padStart(2, '0')).join('');
+    }
+
+    /** Differential Manchester decode, as rtl_433 does. */
+    function dmanDecode(ch, start, maxBits) {
+        const end = Math.min(ch.length, start + 2 * maxBits);
+        const out = [];
+        let i = start;
+        let b2 = 0;
+        while (i + 1 < end) {
+            const b1 = ch[i];
+            b2 = ch[i + 1];
+            i += 2;
+            const b3 = i < end ? ch[i] : b2;
+            if (b1 !== b2) {
+                if (b2 !== b3) {
+                    out.push(0);
+                } else {
+                    b2 = b1;
+                    i -= 1;
+                    break;
+                }
+            } else {
+                b2 = 1 - b1;
+                i -= 2;
+                break;
+            }
+            if (out.length >= maxBits) return out;
+        }
+        while (i + 1 < end && out.length < maxBits) {
+            const b1 = ch[i++];
+            if (b1 === b2) break;
+            b2 = ch[i++];
+            out.push(b1 === b2 ? 1 : 0);
+        }
+        return out;
+    }
+
+    /** Manchester decode, emitting the second chip of each pair. */
+    function manDecode(ch, start, maxBits, invert) {
+        const out = [];
+        let i = start;
+        while (i + 1 < ch.length && out.length < maxBits) {
+            const a = ch[i];
+            const b = ch[i + 1];
+            i += 2;
+            if (a === b) break;
+            out.push(invert ? b ^ 1 : b);
+        }
+        return out;
+    }
+
+    /** Chips from the length of each run of samples. */
+    function rleChips(s, spc) {
+        const chips = [];
+        const pos = [];
+        let i = 0;
+        while (i < s.length) {
+            let j = i;
+            while (j < s.length && s[j] === s[i]) j++;
+            const k = Math.max(1, Math.floor((j - i) / spc + 0.5));
+            for (let m = 0; m < k; m++) {
+                chips.push(s[i]);
+                pos.push(i + Math.floor(m * spc));
+            }
+            i = j;
+        }
+        return [chips, pos];
+    }
+
+    /** Chips from the radio's bit clock (dectpms_push). */
+    function pllChips(s, spc) {
+        const step = Math.floor(65536 / spc);
+        const want = 32768 + Math.floor(step / 2);
+        let phase = 0;
+        let half = 0;
+        const chips = [];
+        const pos = [];
+        for (let i = 0; i < s.length; i++) {
+            const level = s[i];
+            if (level !== half) {
+                half = level;
+                phase += Math.floor((want - phase) / 2);
+            }
+            phase += step;
+            if (phase >= 65536) {
+                phase -= 65536;
+                chips.push(level);
+                pos.push(i);
+            }
+        }
+        return [chips, pos];
+    }
+
+    /** True for a frame of almost all 0 or all 1 bits: a stuck slicer, not a sensor. */
+    function junk(b) {
+        let ones = 0;
+        for (const x of b) for (let v = x; v; v >>= 1) ones += v & 1;
+        return ones <= 4 || ones >= b.length * 8 - 4;
+    }
+
+    /** Every start index of a pattern, overlaps included. */
+    function findAll(text, pat) {
+        const out = [];
+        let i = text.indexOf(pat);
+        while (i >= 0) {
+            out.push(i);
+            i = text.indexOf(pat, i + 1);
+        }
+        return out;
+    }
+
+    /** Toyota PMV-C210: sync A9E, 72 differential Manchester bits. */
+    function toyota(ch, text) {
+        const out = [];
+        for (const [pat, pol] of [['101010011110', '+'], ['010101100001', '-']]) {
+            for (const idx of findAll(text, pat)) {
+                const bits = dmanDecode(ch, idx + 11, 80);
+                const n = Math.min(bits.length, 72);
+                if (n < 72) {
+                    out.push([idx, n, `${n}/72 bits (${pol})`]);
+                    continue;
+                }
+                const b = pack(bits.slice(0, 72));
+                if (crc8(b.subarray(0, 8), 0x07, 0x80) !== b[8]) {
+                    if (!junk(b)) out.push([idx, 72, `72/72 bits, CRC FAIL  ${hex(b)} (${pol})`]);
+                    continue;
+                }
+                const p1 = ((b[4] & 0x7F) << 1) | (b[5] >> 7);
+                const p2 = b[7] ^ 0xFF;
+                const temp = ((b[5] & 0x7F) << 1) | (b[6] >> 7);
+                if (p1 !== p2) {
+                    out.push([idx, 72, `CRC ok, pressure check FAIL  ${hex(b)} (${pol})`]);
+                    continue;
+                }
+                const id = hex(b.subarray(0, 4));
+                out.push([idx, 1000, `OK  id ${id}  ${(p1 * 0.25 - 7).toFixed(1)} PSI  ` +
+                                     `${temp - 40} C (${pol})`]);
+            }
+        }
+        return out;
+    }
+
+    /** Pacific PMV-107J: sync 111110, 67 differential Manchester bits. */
+    function pmv107j(ch, text) {
+        const out = [];
+        for (const [pat, pol] of [['111110', '+'], ['000001', '-']]) {
+            for (const idx of findAll(text, pat)) {
+                const bits = dmanDecode(ch, idx + 6, 70);
+                const n = Math.min(bits.length, 67);
+                if (n < 67) {
+                    out.push([idx, n, `${n}/67 bits (${pol})`]);
+                    continue;
+                }
+                const rest = pack(bits.slice(2, 66));
+                const b = new Uint8Array(9);
+                b[0] = (bits[0] << 1) | bits[1];
+                b.set(rest, 1);
+                if (crc8(b.subarray(0, 8), 0x13, 0x00) !== b[8]) {
+                    if (!junk(b)) out.push([idx, 67, `67/67 bits, CRC FAIL  ${hex(b)} (${pol})`]);
+                    continue;
+                }
+                if (b[5] !== (b[6] ^ 0xFF)) {
+                    out.push([idx, 67, `CRC ok, pressure check FAIL  ${hex(b)} (${pol})`]);
+                    continue;
+                }
+                const id = ((b[0] << 26) + (b[1] << 18) + (b[2] << 10) + (b[3] << 2) + (b[4] >> 6)) >>> 0;
+                const kpa = (b[5] - 40) * 2.48;
+                out.push([idx, 1000, `OK  id ${id.toString(16).toUpperCase().padStart(8, '0')}  ` +
+                                     `${(kpa / 6.895).toFixed(1)} PSI  ${b[7] - 40} C (${pol})`]);
+            }
+        }
+        return out;
+    }
+
+    /** Ford: sync 5556 (or AAA9), 64 Manchester bits, byte sum. */
+    function ford(ch, text) {
+        const out = [];
+        for (const [pat, inv, pol] of [['0101010101010110', true, '+'],
+                                       ['1010101010101001', false, '-']]) {
+            for (const idx of findAll(text, pat)) {
+                const bits = manDecode(ch, idx + 16, 64, inv);
+                const n = bits.length;
+                if (n < 64) {
+                    out.push([idx, n, `${n}/64 bits (${pol})`]);
+                    continue;
+                }
+                const b = pack(bits);
+                let sum = 0;
+                for (let i = 0; i < 7; i++) sum += b[i];
+                if ((sum & 0xFF) !== b[7]) {
+                    if (!junk(b)) out.push([idx, 64, `64/64 bits, SUM FAIL  ${hex(b)} (${pol})`]);
+                    continue;
+                }
+                const psi = ((((b[6] & 0x20) << 3) | b[4]) * 0.25).toFixed(1);
+                const temp = (b[5] & 0x80) ? '' : `  ${(b[5] & 0x7F) - 56} C`;
+                out.push([idx, 1000, `OK  id ${hex(b.subarray(0, 4))}  ${psi} PSI${temp} (${pol})`]);
+            }
+        }
+        return out;
+    }
+
+    const PROTOCOLS = [['TOYOTA', SPC_52, toyota], ['FORD', SPC_52, ford],
+                       ['PMV-107J', SPC_100, pmv107j]];
+
+    /** Run every decoder with both chip clocks. Returns [sample, model, score, desc, chips]. */
+    function decodeSamples(samples) {
+        const found = [];
+        for (const [name, spc, fn] of PROTOCOLS) {
+            for (const [clock, method] of [['rle', rleChips], ['pll', pllChips]]) {
+                const [ch, pos] = method(samples, spc);
+                const text = ch.join('');
+                for (const [idx, score, desc] of fn(ch, text)) {
+                    found.push([pos[idx], name, score, `${desc} [${clock}]`,
+                                text.substr(Math.max(0, idx - 8), 200)]);
+                }
+            }
+        }
+        return found;
+    }
+
+    /** Keep the best candidate of each model in each burst. */
+    function merge(found) {
+        const sorted = found.slice().sort((a, b) => (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : a[0] - b[0]));
+        const out = [];
+        for (const c of sorted) {
+            const last = out[out.length - 1];
+            if (last && last[1] === c[1] && c[0] - last[0] < MERGE) {
+                if (c[2] > last[2]) out[out.length - 1] = c;
+                continue;
+            }
+            out.push(c);
+        }
+        return out.sort((a, b) => a[0] - b[0]);
+    }
+
+    /** Keep the best candidate of each burst, whatever its model. */
+    function bestPerBurst(cands) {
+        const order = {};
+        PROTOCOLS.forEach(([name], i) => { order[name] = i; });
+        const out = [];
+        let first = -BURST;
+        for (const c of cands) {
+            if (out.length && c[0] - first < BURST) {
+                const best = out[out.length - 1];
+                if (c[2] > best[2] || (c[2] === best[2] && order[c[1]] < order[best[1]])) {
+                    out[out.length - 1] = c;
+                }
+                continue;
+            }
+            first = c[0];
+            out.push(c);
+        }
+        return out;
+    }
+
+    /* ---- hints: what to tweak on the radio, from what the bursts show ---- */
+
+    /* A radio decode this soon after a PC OK counts as the radio hearing it too. */
+    const HOLD = FS / 2;
+    /* Stream time with nothing above noise before the quiet hint. */
+    const QUIET = 30 * FS;
+    /* Hints given once per session; the rest are given again after a retune. */
+    const SESSION_HINTS = ['pmv', 'missed'];
+
+    const SENS_NAMES = ['LOW', 'MID', 'HIGH'];
+
+    /** Band, offset, IF preset and SENS from a settings value (byte s, SENS << 8). */
+    function describeSettings(s) {
+        const band = (s & 1) ? '433.92' : '315.00';
+        let off = (s >> 3) & 15;
+        if (off & 8) off -= 16;
+        const ifr = IF_PRESETS[(s >> 1) & 3].toString(16).toUpperCase();
+        const sens = SENS_NAMES[(s >> 8) & 3] || '?';
+        const offTxt = `${off >= 0 ? '+' : ''}${off * 5}`;
+        return { band, offset: off * 5, ifr, sens,
+                 text: `${band} MHz, offset ${offTxt} kHz, IF ${ifr}, SENS ${sens}` };
+    }
+
+    /** Emoji for a burst line: decoded, failed its check, or broke up. */
+    function burstIcon(score, desc) {
+        if (score >= 1000) return '✅';
+        return desc.includes('FAIL') ? '❌' : '🟠';
+    }
+
+    /** Collects TPMS CAP bytes, reports what the decoders find and offers hints. */
+    class Stream {
+        constructor(minBits, emit) {
+            this.minBits = minBits;
+            this.emit = emit;   /* emit({kind, time, text, model?, score?, chips?}) */
+            this.buf = [];
+            this.base = 0;
+            this.done = 0;
+            this.pendingSet = 0;   /* settings bytes still to read: 2, then 1 */
+            this.setByte = 0;
+            this.pendingHit = false;
+            this.stats = {};
+            this.gaps = 0;
+            this.radioHits = 0;
+            this.results = [];
+            this.events = [];   /* radio events, handled in time order with the bursts */
+            this.cur = null;    /* radio settings in force at the processing point */
+            this.bestBySet = new Map();
+            this.given = new Set();
+            this.counts = {};
+            this.pendingOk = [];
+            this.lastSignal = 0;
+            this.hints = [];
+            this.radio = null;   /* latest settings record, as it arrived */
+            this.board = new Map();  /* settings -> time and results at that setting */
+            this.setAt = null;       /* sample where the current setting's time started */
+        }
+
+        feed(data) {
+            for (const byte of data) {
+                if (this.pendingSet === 2) {
+                    this.pendingSet = 1;
+                    this.setByte = byte;
+                } else if (this.pendingSet === 1) {
+                    this.pendingSet = 0;
+                    const set = this.setByte | ((byte & 3) << 8);
+                    const light = (byte >> 2) & 1;
+                    /* Live copy for the settings dashboard, ahead of the decoding. */
+                    this.radio = { ...describeSettings(set), s: set, light, raw: this.setByte,
+                                   sensLevel: byte & 3 };
+                    this.emit({ kind: 'live', time: this.now(), text: '', radio: this.radio });
+                    this.event({ kind: 'settings', s: set });
+                } else if (this.pendingHit) {
+                    this.pendingHit = false;
+                    this.radioHits++;
+                    this.event({ kind: 'radio', model: RADIO_MODELS[byte] || String(byte) });
+                } else if (byte < 0x80) {
+                    for (let k = 6; k >= 0; k--) this.buf.push((byte >> k) & 1);
+                } else if (byte === MARK_GAP) {
+                    this.gaps++;
+                    this.flush();
+                } else if (byte === MARK_SET) {
+                    this.pendingSet = 2;
+                } else if (byte === MARK_HIT) {
+                    this.pendingHit = true;
+                }
+            }
+            if (this.buf.length >= OVERLAP + CHUNK) this.process(false);
+        }
+
+        event(ev) {
+            ev.at = this.base + this.buf.length;
+            this.events.push(ev);
+        }
+
+        now() {
+            return (this.base + this.buf.length) / FS;
+        }
+
+        flush() {
+            this.process(true);
+            this.base += this.buf.length;
+            this.done = this.base;
+            this.buf = [];
+        }
+
+        out(ev) {
+            ev.time = ev.at / FS;
+            this.emit(ev);
+        }
+
+        hint(key, at, text) {
+            if (this.given.has(key)) return;
+            this.given.add(key);
+            this.hints.push(text);
+            this.out({ kind: 'hint', at, key, text: '💡 ' + text });
+        }
+
+        /** Hint for OK frames the radio did not decode within HOLD. */
+        flushPending(pos) {
+            const keep = [];
+            for (const p of this.pendingOk) {
+                if (p.at + HOLD >= pos) {
+                    keep.push(p);
+                    continue;
+                }
+                this.hint('missed', p.at + HOLD, `The PC decoded a ${p.model} frame that the radio ` +
+                          'did not. The radio\'s bit clock is the weak spot: save the capture and ' +
+                          'send it.');
+            }
+            this.pendingOk = keep;
+        }
+
+        /** Leaderboard row for one setting, made on first use. */
+        entry(key) {
+            let e = this.board.get(key);
+            if (!e) {
+                e = { s: key, samples: 0, bursts: 0, ok: 0, fail: 0, partial: 0, best: 0 };
+                this.board.set(key, e);
+            }
+            return e;
+        }
+
+        /** Credit the stream time up to a sample to the setting in force. */
+        account(to) {
+            if (this.cur !== null && this.setAt !== null && to > this.setAt) {
+                this.entry(this.cur).samples += to - this.setAt;
+            }
+            if (this.setAt === null || to > this.setAt) this.setAt = to;
+        }
+
+        /**
+         * Settings ranked by results per minute, so a short and a long stay
+         * compare fairly. Rows with less than minSec are listed but not ranked.
+         * Order: OK frames, then full frames that failed, then the best bit
+         * count, then partial frames, all per minute where it applies.
+         */
+        leaderboard(minSec = 15) {
+            const rows = [...this.board.values()].map((e) => {
+                const seconds = e.samples / FS;
+                const min = seconds / 60;
+                return { ...describeSettings(e.s), ...e, seconds, ranked: seconds >= minSec,
+                         okRate: min ? e.ok / min : 0, failRate: min ? e.fail / min : 0,
+                         partialRate: min ? e.partial / min : 0, current: e.s === this.cur };
+            });
+            rows.sort((a, b) => (b.ranked - a.ranked) || (b.okRate - a.okRate) ||
+                      (b.failRate - a.failRate) || (b.best - a.best) ||
+                      (b.partialRate - a.partialRate) || (b.seconds - a.seconds));
+            return rows;
+        }
+
+        onSettings(ev) {
+            if (ev.s === this.cur) return;
+            this.account(ev.at);
+            const first = this.cur === null;
+            this.cur = ev.s;
+            this.setAt = ev.at;
+            this.entry(ev.s);
+            const d = describeSettings(ev.s);
+            this.out({ kind: 'settings', at: ev.at, band: d.band, offset: d.offset, ifr: d.ifr,
+                       sens: d.sens,
+                       text: `⚙️ radio: ${d.text}` });
+            this.lastSignal = ev.at;
+            if (first) return;
+            for (const key of [...this.given]) if (!SESSION_HINTS.includes(key)) this.given.delete(key);
+            this.counts = {};
+            let best = null;
+            for (const [s, b] of this.bestBySet) if (!best || b.score > best.score) best = { s, ...b };
+            /* Only when the best setting changes, or a sweep repeats it at every step. */
+            if (best && best.s !== ev.s && best.s !== this.lastBest) {
+                this.lastBest = best.s;
+                const what = best.score >= 1000 ? `${best.model} decoded OK` : `${best.score} bits`;
+                this.hint('best', ev.at, `Best so far: ${describeSettings(best.s).text} (${what}). ` +
+                          'Go back to it if nothing here beats it.');
+            }
+        }
+
+        onRadio(ev) {
+            this.out({ kind: 'radio', at: ev.at, text: `📻 radio decoded ${ev.model}` });
+            this.pendingOk = this.pendingOk.filter((p) => !(p.at <= ev.at && ev.at <= p.at + HOLD));
+        }
+
+        onBurst(b) {
+            const ok = b.score >= 1000;
+            const st = this.stats[b.model] || (this.stats[b.model] = [0, 0, 0]);
+            st[0]++;
+            st[2] = Math.max(st[2], Math.min(b.score, 99));
+            if (ok) st[1]++;
+            this.results.push([b.at, b.model, b.score, b.desc]);
+            this.out({ kind: ok ? 'ok' : (b.desc.includes('FAIL') ? 'fail' : 'partial'), at: b.at,
+                       model: b.model, score: b.score, chips: b.chips,
+                       text: `${burstIcon(b.score, b.desc)} ${b.model.padEnd(9)}${b.desc}` });
+            this.lastSignal = b.at;
+            if (this.cur !== null) {
+                const e = this.entry(this.cur);
+                e.bursts++;
+                if (ok) e.ok++;
+                else if (b.desc.includes('FAIL')) e.fail++;
+                else e.partial++;
+                /* Bits decoded; a checked frame counts as 100. */
+                e.best = Math.max(e.best, ok ? 100 : b.score);
+                const prev = this.bestBySet.get(this.cur);
+                if (!prev || b.score > prev.score) this.bestBySet.set(this.cur, { score: b.score, model: b.model });
+            }
+            if (ok && b.model === 'PMV-107J') {
+                this.hint('pmv', b.at, 'This sensor is a Pacific PMV-107J. TPMS EU / NA cannot ' +
+                          'decode it yet: save the capture and send it.');
+            } else if (ok) {
+                this.pendingOk.push({ at: b.at, model: b.model });
+            } else if (b.desc.includes('FAIL')) {
+                this.hint('crc', b.at, 'Whole frames arrive with a bit error. Press UP or DOWN on ' +
+                          'the radio for one 5 kHz offset step each way, then * for the IF presets. ' +
+                          'If every setting fails the same way, send the capture: it may be another ' +
+                          'sensor format.');
+            } else {
+                this.counts.partial = (this.counts.partial || 0) + 1;
+                this.counts.partialBest = Math.max(this.counts.partialBest || 0, b.score);
+                if (this.counts.partial >= 2) {
+                    this.hint('partial', b.at, `Bursts arrive but break up (best ` +
+                              `${this.counts.partialBest} bits). Step the offset with UP / DOWN, ` +
+                              'waking the sensor after each step, and keep the one with the ' +
+                              'highest count. Then try the IF presets with *, and SENS ' +
+                              'with 3 (HIGH hears weaker bursts).');
+                }
+            }
+        }
+
+        process(final) {
+            const limit = final ? this.buf.length : this.buf.length - OVERLAP;
+            if (limit <= 0) return;
+            const shown = [];
+            for (const [start, name, score, desc, chips] of merge(decodeSamples(this.buf))) {
+                const at = this.base + start;
+                if (at < this.done || start >= limit) continue;
+                if (score < this.minBits + (name === 'PMV-107J' ? PMV_EXTRA : 0)) {
+                    const st = this.stats[name] || (this.stats[name] = [0, 0, 0]);
+                    st[2] = Math.max(st[2], score);
+                    continue;
+                }
+                shown.push([at, name, score, desc, chips]);
+            }
+            const items = bestPerBurst(shown).map(([at, model, score, desc, chips]) =>
+                ({ kind: 'burst', at, model, score, desc, chips }));
+            this.done = this.base + limit;
+            const keep = [];
+            for (const ev of this.events) (ev.at < this.done ? items : keep).push(ev);
+            this.events = keep;
+            /* Events before bursts at the same sample; the sort is stable. */
+            items.sort((a, b) => a.at - b.at || (a.kind === 'burst') - (b.kind === 'burst'));
+            for (const it of items) {
+                this.flushPending(it.at);
+                if (it.kind === 'burst') this.onBurst(it);
+                else if (it.kind === 'settings') this.onSettings(it);
+                else this.onRadio(it);
+            }
+            this.flushPending(final ? Infinity : this.done);
+            this.account(this.done);
+            if (this.done - this.lastSignal > QUIET) {
+                this.hint('quiet', this.done, 'Nothing above noise for 30 s. Wake the sensor next ' +
+                          'to the radio, check the band with 2 (433.92 in Europe, 315.00 in ' +
+                          'North America), and try SENS HIGH with 3.');
+            }
+            const drop = Math.max(0, limit - LEAD);
+            this.buf.splice(0, drop);
+            this.base += drop;
+        }
+    }
+
+    /* ---- test helpers: encode frames the way the sensors send them ---- */
+
+    function unpack(data, nbits) {
+        const out = [];
+        for (let i = 0; i < nbits; i++) out.push((data[i >> 3] >> (7 - (i & 7))) & 1);
+        return out;
+    }
+
+    function dmanEncode(bits, prev) {
+        const out = [];
+        for (const b of bits) {
+            const c1 = 1 - prev;
+            const c2 = b ? c1 : 1 - c1;
+            out.push(c1, c2);
+            prev = c2;
+        }
+        return out;
+    }
+
+    function chipsToSamples(chips, spc, invert) {
+        const out = [];
+        const n = Math.floor(chips.length * spc);
+        for (let i = 0; i < n; i++) {
+            const c = chips[Math.min(Math.floor(i / spc), chips.length - 1)];
+            out.push(invert ? c ^ 1 : c);
+        }
+        return out;
+    }
+
+    function toStream(samples) {
+        const out = [];
+        for (let i = 0; i + 6 < samples.length; i += 7) {
+            let v = 0;
+            for (let k = 0; k < 7; k++) v = (v << 1) | samples[i + k];
+            out.push(v);
+        }
+        return out;
+    }
+
+    /** Toyota PMV-C210 chips: id 00F211A9, 28 PSI, 1 C. badCrc flips a CRC bit. */
+    function toyotaChips(badCrc) {
+        const t = new Uint8Array([0x00, 0xF2, 0x11, 0xA9, 0, 0, 0, 0, 0]);
+        const p = 140;
+        const tc = 41;
+        t[4] = (p >> 1) & 0x7F;
+        t[5] = ((p & 1) << 7) | ((tc >> 1) & 0x7F);
+        t[6] = (tc & 1) << 7;
+        t[7] = p ^ 0xFF;
+        t[8] = crc8(t.subarray(0, 8), 0x07, 0x80) ^ (badCrc ? 0x10 : 0);
+        return [0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 1, 1, 1].concat(dmanEncode(unpack(t, 72), 1), [1, 0, 1]);
+    }
+
+    /** PMV-107J chips: id 0ABCDEF5, 32 PSI, 25 C. */
+    function pmvChips() {
+        const ident = 0x0ABCDEF5;
+        const v = new Uint8Array(9);
+        v[0] = (ident >>> 26) & 3;
+        v[1] = (ident >>> 18) & 0xFF;
+        v[2] = (ident >>> 10) & 0xFF;
+        v[3] = (ident >>> 2) & 0xFF;
+        v[4] = ((ident & 3) << 6) | 0x08;
+        v[5] = Math.floor(32 * 6.895 / 2.48 + 40.5);
+        v[6] = v[5] ^ 0xFF;
+        v[7] = 25 + 40;
+        v[8] = crc8(v.subarray(0, 8), 0x13, 0x00);
+        const bits = [v[0] >> 1, v[0] & 1].concat(unpack(v.subarray(1), 64), [0]);
+        return [1, 1, 1, 1, 1, 1, 0].concat(dmanEncode(bits, 0), [1, 0, 1]);
+    }
+
+    /** Ford chips: id A1B2C3D4, 36 PSI, 18 C. */
+    function fordChips() {
+        const f = new Uint8Array([0xA1, 0xB2, 0xC3, 0xD4, 144, 56 + 18, 0x04, 0]);
+        let s = 0;
+        for (let i = 0; i < 7; i++) s += f[i];
+        f[7] = s & 0xFF;
+        const chips = unpack([0x55, 0x55, 0x55, 0x56], 32);
+        for (const b of unpack(f, 64)) chips.push(b, 1 - b);
+        return chips;
+    }
+
+    /** Slicer noise from a fixed seed. */
+    function noiseMaker(seed) {
+        return (n) => Array.from({ length: n }, () => {
+            seed = (seed * 1103515245 + 12345) >>> 0;
+            return (seed >>> 16) & 1;
+        });
+    }
+
+    /** Encode one frame of each model, decode it, and report pass or fail lines. */
+    function selftest() {
+        const noise = noiseMaker(7);
+        const lines = [];
+        let fails = 0;
+        for (const invert of [false, true]) {
+            const st = new Stream(24, () => {});
+            let samples = noise(3000);
+            samples = samples.concat(chipsToSamples(toyotaChips(false), SPC_52, invert), noise(2000));
+            samples = samples.concat(chipsToSamples(pmvChips(), SPC_100, invert), noise(2000));
+            samples = samples.concat(chipsToSamples(fordChips(), SPC_52, invert), noise(3000));
+            st.feed([MARK_SET, 0x01, 1].concat(toStream(samples), [MARK_GAP]));
+            for (const [name, want] of [['TOYOTA', 'id 00F211A9  28.0 PSI  1 C'],
+                                        ['PMV-107J', 'id 0ABCDEF5  32.0 PSI  25 C'],
+                                        ['FORD', 'id A1B2C3D4  36.0 PSI  18 C']]) {
+                const ok = st.results.some((r) => r[1] === name && r[2] >= 1000 && r[3].includes(want));
+                lines.push(`${ok ? 'ok  ' : 'FAIL'}  ${name} ${invert ? 'inverted' : 'normal'}`);
+                if (!ok) fails++;
+            }
+        }
+        return { fails, lines };
+    }
+
+    /* PC to radio: CMD_SYNC, c, c ^ 0xFF. c is a field (high nibble) and a value. */
+    const CMD_SYNC = 0xA5;
+    const CMD = { band: 0x10, ifp: 0x20, offset: 0x30, sens: 0x40, light: 0x50, clear: 0x60,
+                  report: 0x70 };
+
+    /** Bytes of one command for TPMS CAP. */
+    function command(field, value) {
+        const c = (CMD[field] | ((value || 0) & 15)) & 0xFF;
+        return new Uint8Array([CMD_SYNC, c, c ^ 0xFF]);
+    }
+
+    const api = { FS, BAUD, MARK_GAP, MARK_SET, MARK_HIT, SPC_52, SPC_100, Stream, selftest,
+                  command, CMD, IF_PRESETS,
+                  decodeSamples, merge, crc8, dmanDecode, manDecode, toStream, chipsToSamples,
+                  toyotaChips, pmvChips, fordChips, noiseMaker, describeSettings };
+    if (typeof module !== 'undefined' && module.exports) module.exports = api;
+    else root.KPlug = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<!-- DECODER END -->
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const MODELS = ['TOYOTA', 'PMV-107J', 'FORD'];
+const MAX_LINES = 5000;
+
+let port = null;
+let reader = null;
+let stream = null;
+let capture = [];
+let captureBytes = 0;
+let logLines = [];
+let lastBytes = 0;
+let lastTick = performance.now();
+let lastData = 0;
+let writer = null;
+let live = null;        /* latest settings record from the radio */
+let liveAt = 0;
+let waiting = null;     /* {field, value, at, el} until the radio confirms */
+let sendChain = Promise.resolve();
+let sliderDrag = false;
+let sweeping = false;
+/* TPMS CAP holds one command until its next key poll (every 40 ms), so space them out. */
+const CMD_GAP_MS = 150;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const kHz = (off) => `${off >= 0 ? '+' : ''}${off} kHz`;
+
+function setState(text, cls) {
+  const s = $('state');
+  s.textContent = text;
+  s.className = 'pill ' + cls;
+}
+
+function hint(text, alert) {
+  $('hint').textContent = text || '';
+  $('hint').className = 'hint' + (alert ? ' alert' : '');
+}
+
+function fmtTime(t) {
+  return ('[' + t.toFixed(2).padStart(8) + 's] ');
+}
+
+function addLine(ev) {
+  const text = fmtTime(ev.time) + ev.text;
+  logLines.push(text);
+  if (ev.kind === 'hint') showTip(ev.text);
+  if ((ev.kind === 'partial' || ev.kind === 'fail') && !$('showPartial').checked) return;
+  if (ev.kind === 'radio' && !$('showRadio').checked) return;
+  if (ev.kind === 'hint' && !$('showHints').checked) return;
+  const log = $('log');
+  const div = document.createElement('div');
+  div.className = ev.kind;
+  div.textContent = text;
+  if (ev.chips) {
+    div.classList.add('click');
+    div.addEventListener('click', () => {
+      for (const d of log.querySelectorAll('.sel')) d.classList.remove('sel');
+      div.classList.add('sel');
+      $('detail').textContent = ev.model + ' chips: ' + ev.chips;
+    });
+  }
+  log.appendChild(div);
+  while (log.childNodes.length > MAX_LINES) log.removeChild(log.firstChild);
+  if ($('autoscroll').checked) log.scrollTop = log.scrollHeight;
+}
+
+function showTip(text) {
+  const tips = $('tips');
+  const empty = tips.querySelector('.empty');
+  if (empty) empty.remove();
+  for (const li of tips.children) li.classList.add('old');
+  const li = document.createElement('li');
+  li.textContent = text.replace(/^💡 /, '');
+  tips.prepend(li);
+  while (tips.children.length > 5) tips.lastChild.remove();
+}
+
+function resetTips() {
+  $('tips').innerHTML = '<li class="empty">Hints appear here when the bursts show something ' +
+                        'to tweak on the radio.</li>';
+}
+
+function info(text, kind) {
+  addLine({ kind: kind || 'info', time: stream ? stream.now() : 0, text });
+}
+
+function newStream() {
+  resetTips();
+  live = null;
+  waiting = null;
+  renderDash();
+  stream = new KPlug.Stream(parseInt($('minbits').value, 10) || 24, (ev) => {
+    if (ev.kind === 'live') {
+      onLive(ev.radio);
+      return;
+    }
+    addLine(ev);
+  });
+}
+
+/** Mark the button whose value matches, in one segmented control. */
+function setSeg(id, value) {
+  for (const b of $(id).querySelectorAll('button')) {
+    b.classList.toggle('on', value !== null && Number(b.dataset.v) === value);
+  }
+}
+
+/** The value a settings record holds for one control. */
+function liveValue(field) {
+  if (!live) return null;
+  return { band: live.raw & 1, ifp: (live.raw >> 1) & 3, offset: (live.raw >> 3) & 15,
+           sens: live.sensLevel, light: live.light }[field];
+}
+
+function renderDash() {
+  const r = live;
+  $('dBand').textContent = r ? r.band : '–';
+  $('dOff').textContent = r ? `${r.offset >= 0 ? '+' : ''}${r.offset} kHz` : '–';
+  $('dIf').textContent = r ? r.ifr : '–';
+  $('dSens').textContent = r ? r.sens : '–';
+  $('dLight').textContent = r ? (r.light ? 'On' : 'Timed') : '–';
+  if (!sliderDrag) {
+    $('offVal').textContent = r ? kHz(r.offset) : '–';
+    $('offSlider').value = r ? String(r.offset / 5) : '0';
+  }
+  setSeg('cBand', r ? r.raw & 1 : null);
+  setSeg('cIf', r ? (r.raw >> 1) & 3 : null);
+  setSeg('cSens', r ? r.sensLevel : null);
+  setSeg('cLight', r ? r.light : null);
+  const can = !!(writer && live);
+  for (const b of document.querySelectorAll('#cBand button, #cIf button, #cSens button, ' +
+                                           '#cLight button, #offDown, #offUp, #offZero, ' +
+                                           '#offSlider, #cClear, #cReport, #swStart, ' +
+                                           '#boardBody button')) {
+    b.disabled = !can && !(b.id === 'cReport' && writer);
+  }
+  if (sweeping) $('swStart').disabled = true;
+  for (const b of document.querySelectorAll('.seg button.wait')) b.classList.remove('wait');
+  if (waiting && waiting.el) waiting.el.classList.add('wait');
+}
+
+function onLive(r) {
+  live = r;
+  liveAt = performance.now();
+  if (waiting && liveValue(waiting.field) === waiting.value) {
+    info(`⚙️ Radio set: ${r.text}${r.light ? ', light on' : ''}.`);
+    waiting = null;
+  }
+  renderDash();
+}
+
+/** Queue a command; commands go out CMD_GAP_MS apart. */
+function send(field, value, el) {
+  if (!writer) return Promise.resolve();
+  sendChain = sendChain.then(() => sendNow(field, value, el)).then(() => sleep(CMD_GAP_MS));
+  return sendChain;
+}
+
+async function sendNow(field, value, el) {
+  if (!writer) return;
+  try {
+    await writer.write(KPlug.command(field, value));
+  } catch (e) {
+    info('⚠️ Send failed: ' + e.message, 'error');
+    return;
+  }
+  if (field === 'clear' || field === 'report') {
+    info(field === 'clear' ? '🧹 Asked the radio to clear its counters.' : '🔄 Asked the radio ' +
+         'for its settings.');
+    return;
+  }
+  waiting = { field, value, at: performance.now(), el };
+  renderDash();
+}
+
+/** True when the radio reports every field of a setting. */
+function matches(c) {
+  return !!live && ['band', 'ifp', 'offset', 'sens'].every((f) => liveValue(f) === c[f]);
+}
+
+/** A leaderboard row or sweep step as command values. */
+function comboOf(r) {
+  return { band: r.s & 1, ifp: (r.s >> 1) & 3, offset: (r.s >> 3) & 15, sens: (r.s >> 8) & 3 };
+}
+
+/** Send only the fields that differ from what the radio reports. */
+async function applyCombo(c) {
+  for (const f of ['band', 'ifp', 'offset', 'sens']) {
+    if (liveValue(f) !== c[f]) await send(f, c[f], null);
+  }
+}
+
+async function waitFor(test, ms) {
+  const end = performance.now() + ms;
+  while (performance.now() < end) {
+    if (test()) return true;
+    await sleep(100);
+  }
+  return test();
+}
+
+function renderBoard() {
+  if (!stream) return;
+  const minSec = Math.max(1, parseInt($('minSec').value, 10) || 15);
+  const rows = stream.leaderboard(minSec);
+  if (!rows.length) return;
+  let rank = 0;
+  $('boardBody').innerHTML = rows.map((r) => {
+    const per = (v) => (r.ranked ? v.toFixed(1) : '–');
+    const best = r.best >= 100 ? '✅ full' : (r.best ? r.best + ' bits' : '–');
+    const n = r.ranked ? String(++rank) : '';
+    const left = r.ranked ? '' : ` <span title="time still needed">(${Math.ceil(minSec - r.seconds)} s more)</span>`;
+    const cls = [r.current ? 'cur' : '', r.ranked ? '' : 'short'].join(' ').trim();
+    return `<tr class="${cls}"><td class="rank">${n}</td>` +
+           `<td>${kHz(r.offset)} · ${r.ifr} · ${r.sens} <span class="hint">${r.band}</span></td>` +
+           `<td class="num">${Math.round(r.seconds)} s${left}</td>` +
+           `<td class="num">${per(r.okRate)}</td><td class="num">${per(r.failRate)}</td>` +
+           `<td class="num">${per(r.partialRate)}</td><td class="num">${best}</td>` +
+           `<td>${r.current ? '◀ now' : `<button data-s="${r.s}">Use</button>`}</td></tr>`;
+  }).join('');
+  for (const b of $('boardBody').querySelectorAll('button')) b.disabled = !(writer && live);
+}
+
+async function runSweep() {
+  if (!writer || !live) {
+    info('⚠️ Connect, and wait for the radio to report its settings, before a sweep.', 'error');
+    return;
+  }
+  const a = Number($('swFrom').value);
+  const b = Number($('swTo').value);
+  const ifs = $('swIf').checked ? [0, 1, 2, 3] : [liveValue('ifp')];
+  const senses = $('swSens').checked ? [0, 1, 2] : [liveValue('sens')];
+  const dwell = Math.min(600, Math.max(5, parseInt($('swDwell').value, 10) || 30));
+  const band = liveValue('band');
+  const steps = [];
+  for (const ifp of ifs) {
+    for (const sens of senses) {
+      for (let o = Math.min(a, b); o <= Math.max(a, b); o++) steps.push({ band, ifp, sens, offset: o & 15 });
+    }
+  }
+  const total = steps.length * dwell;
+  /* Rank every step: each one gets dwell seconds. */
+  const rankAfter = Math.max(1, dwell - 2);
+  if ((parseInt($('minSec').value, 10) || 15) > rankAfter) $('minSec').value = String(rankAfter);
+  info(`🔁 Sweep: ${steps.length} settings, ${dwell} s each, about ${Math.ceil(total / 60)} min. ` +
+       'Keep waking the sensor.');
+  sweeping = true;
+  $('swStop').disabled = false;
+  renderDash();
+  for (let k = 0; k < steps.length && sweeping; k++) {
+    const c = steps[k];
+    await applyCombo(c);
+    if (!(await waitFor(() => matches(c), 4000))) {
+      info('⚠️ The radio did not take the sweep setting. Sweep stopped.', 'error');
+      break;
+    }
+    const t0 = performance.now();
+    while (sweeping && performance.now() - t0 < dwell * 1000) {
+      const left = Math.ceil(dwell - (performance.now() - t0) / 1000);
+      $('swInfo').textContent = `${k + 1} / ${steps.length}: ${KPlug.describeSettings(
+        c.band | (c.ifp << 1) | (c.offset << 3) | (c.sens << 8)).text}, ${left} s left.`;
+      await sleep(250);
+    }
+  }
+  const stopped = !sweeping;
+  sweeping = false;
+  $('swStop').disabled = true;
+  const top = stream.leaderboard(Math.max(1, dwell - 2)).find((r) => r.ranked && r.bursts);
+  $('swInfo').textContent = top ? `Best: ${top.text}. Press Use on its leaderboard row to keep it.` :
+    'No bursts during the sweep. Wake the sensor and try again.';
+  info((stopped ? '⏹ Sweep stopped. ' : '🏁 Sweep done. ') + (top ? `Best: ${top.text}.` :
+       'No bursts heard.'));
+  renderDash();
+}
+
+function bindSeg(id, field) {
+  for (const b of $(id).querySelectorAll('button')) {
+    b.addEventListener('click', () => send(field, Number(b.dataset.v), b));
+  }
+}
+
+function renderStats() {
+  if (!stream) return;
+  const rows = MODELS.map((m) => {
+    const [seen, ok, best] = stream.stats[m] || [0, 0, 0];
+    const bestTxt = best >= 99 ? 'full frame' : String(best);
+    return `<tr><td>${m}</td><td class="num">${seen}</td><td class="num">${ok}</td>` +
+           `<td class="num">${bestTxt}</td></tr>`;
+  });
+  $('stats').innerHTML = rows.join('');
+  $('stime').textContent = stream.now().toFixed(1) + ' s';
+  $('gaps').textContent = stream.gaps;
+  $('rhits').textContent = stream.radioHits;
+}
+
+function feedBytes(bytes) {
+  capture.push(bytes);
+  captureBytes += bytes.length;
+  stream.feed(bytes);
+}
+
+setInterval(() => {
+  const now = performance.now();
+  const rate = (captureBytes - lastBytes) * 1000 / (now - lastTick);
+  lastBytes = captureBytes;
+  lastTick = now;
+  $('rate').textContent = `${(captureBytes / 1024).toFixed(0)} KB, ${(rate / 1024).toFixed(1)} KB/s`;
+  renderStats();
+  renderBoard();
+  if (waiting && now - waiting.at > 3000) {
+    info('⚠️ The radio did not confirm the change. Is TPMS CAP from this build running? ' +
+         'Older builds only send.', 'error');
+    waiting = null;
+    renderDash();
+  }
+  if (port && live) {
+    const age = (now - liveAt) / 1000;
+    $('ctlNote').textContent = age < 5 ? 'Live from the radio. Changes take effect at once ' +
+      'and reset the counters.' : `No settings from the radio for ${age.toFixed(0)} s.`;
+  } else if (port) {
+    $('ctlNote').textContent = 'Waiting for the radio to send its settings (every 2 s).';
+  }
+  if (port) {
+    if (now - lastData > 5000) {
+      hint('No data. Is TPMS CAP running and showing K-PLUG 115200: KPLUG.HTML? Are UV Studio and ' +
+           'K5Viewer closed?', true);
+    } else if (rate > 0 && rate < 3000) {
+      hint('Data rate is low (TPMS CAP sends about 5.5 KB/s). Check the baud rate.', true);
+    } else {
+      hint('Receiving.');
+    }
+  }
+}, 1000);
+
+async function connect() {
+  if (!('serial' in navigator)) {
+    setState('No Web Serial', 'err');
+    hint('This browser has no Web Serial. Use Chrome or Edge on a desktop. A saved capture ' +
+         'can still be opened here.', true);
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: parseInt($('baud').value, 10), bufferSize: 65536 });
+  } catch (e) {
+    port = null;
+    info('⚠️ Connect failed: ' + e.message, 'error');
+    return;
+  }
+  newStream();
+  capture = [];
+  captureBytes = 0;
+  lastBytes = 0;
+  lastData = performance.now();
+  setState('Connected', 'on');
+  $('connect').disabled = true;
+  $('disconnect').disabled = false;
+  info(`🔌 Connected at ${$('baud').value} baud. Start TPMS CAP on the radio and wake a sensor.`);
+  try {
+    writer = port.writable ? port.writable.getWriter() : null;
+  } catch (e) {
+    writer = null;
+  }
+  renderDash();
+  readLoop();
+  if (writer) send('report', 0);
+}
+
+async function readLoop() {
+  while (port && port.readable) {
+    reader = port.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value && value.length) {
+          lastData = performance.now();
+          feedBytes(value);
+        }
+      }
+    } catch (e) {
+      info('⚠️ Read error: ' + e.message, 'error');
+    } finally {
+      reader.releaseLock();
+      reader = null;
+    }
+    if (!port) break;
+  }
+}
+
+async function disconnect() {
+  const p = port;
+  port = null;
+  try {
+    if (writer) {
+      writer.releaseLock();
+      writer = null;
+    }
+    if (reader) await reader.cancel();
+    if (p) await p.close();
+  } catch (e) {
+    info('⚠️ Close: ' + e.message, 'error');
+  }
+  if (stream) {
+    stream.flush();
+    renderStats();
+    info('🔌 Disconnected. ' + summary());
+  }
+  setState('Not connected', 'off');
+  hint('');
+  waiting = null;
+  renderDash();
+  $('ctlNote').textContent = live ? 'Last settings the radio sent. Connect to change them.' :
+    'Connect to the radio running TPMS CAP to see and change its settings.';
+  $('connect').disabled = false;
+  $('disconnect').disabled = true;
+}
+
+function summary() {
+  const parts = MODELS.map((m) => {
+    const [seen, ok, best] = stream.stats[m] || [0, 0, 0];
+    return `${m} ${ok} OK / ${seen} shown, best ${best >= 99 ? 'full frame' : best + ' bits'}`;
+  });
+  return `${stream.now().toFixed(1)} s of samples, ${stream.gaps} pauses, ` +
+         `${stream.radioHits} radio decodes. ` + parts.join('; ');
+}
+
+function download(name, blob) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function stamp() {
+  return new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+}
+
+$('connect').addEventListener('click', connect);
+$('disconnect').addEventListener('click', disconnect);
+$('clear').addEventListener('click', () => {
+  $('log').textContent = '';
+  $('detail').textContent = '';
+  logLines = [];
+});
+$('minbits').addEventListener('change', () => {
+  if (stream) stream.minBits = parseInt($('minbits').value, 10) || 24;
+});
+$('saveCap').addEventListener('click', () => {
+  if (!captureBytes) return info('⚠️ Nothing captured yet.');
+  download(`tpms-cap-${stamp()}.bin`, new Blob(capture, { type: 'application/octet-stream' }));
+});
+$('saveLog').addEventListener('click', () => {
+  const text = logLines.join('\n') + (stream ? '\n' + summary() + '\n' : '\n');
+  download(`tpms-log-${stamp()}.txt`, new Blob([text], { type: 'text/plain' }));
+});
+$('copyLog').addEventListener('click', async () => {
+  const text = logLines.join('\n') + (stream ? '\n' + summary() : '');
+  try {
+    await navigator.clipboard.writeText(text);
+    info('📋 Log copied.');
+  } catch (e) {
+    info('⚠️ Copy failed: ' + e.message, 'error');
+  }
+});
+$('openCap').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', async () => {
+  const f = $('file').files[0];
+  if (!f) return;
+  if (port) await disconnect();
+  newStream();
+  capture = [];
+  captureBytes = 0;
+  info(`📂 Replaying ${f.name} (${(f.size / 1024).toFixed(0)} KB).`);
+  feedBytes(new Uint8Array(await f.arrayBuffer()));
+  stream.flush();
+  renderStats();
+  info('📂 Replay done. ' + summary());
+  $('file').value = '';
+});
+$('selftest').addEventListener('click', () => {
+  const r = KPlug.selftest();
+  for (const line of r.lines) info('🧪 self-test ' + line, line.startsWith('ok') ? 'info' : 'error');
+  info(r.fails ? `❌ Self-test FAILED (${r.fails}).` : '✅ Self-test passed.', r.fails ? 'error' : 'info');
+});
+if (navigator.serial) {
+  navigator.serial.addEventListener('disconnect', (e) => {
+    if (port && e.target === port) {
+      info('⚠️ Cable unplugged.', 'error');
+      disconnect();
+    }
+  });
+} else {
+  setState('No Web Serial', 'err');
+  hint('Web Serial needs Chrome or Edge on a desktop. Captures can still be opened and replayed.',
+       true);
+}
+bindSeg('cBand', 'band');
+bindSeg('cIf', 'ifp');
+bindSeg('cSens', 'sens');
+bindSeg('cLight', 'light');
+$('offDown').addEventListener('click', () => {
+  const v = liveValue('offset');
+  if (v !== null) send('offset', (v + 15) & 15, null);
+});
+$('offUp').addEventListener('click', () => {
+  const v = liveValue('offset');
+  if (v !== null) send('offset', (v + 1) & 15, null);
+});
+$('offZero').addEventListener('click', () => send('offset', 0, null));
+$('cClear').addEventListener('click', () => send('clear', 0));
+$('cReport').addEventListener('click', () => send('report', 0));
+$('offSlider').addEventListener('pointerdown', () => { sliderDrag = true; });
+$('offSlider').addEventListener('input', () => {
+  sliderDrag = true;
+  $('offVal').textContent = kHz(Number($('offSlider').value) * 5);
+});
+$('offSlider').addEventListener('change', () => {
+  sliderDrag = false;
+  send('offset', Number($('offSlider').value) & 15, null);
+});
+for (const id of ['swFrom', 'swTo']) {
+  for (let o = -8; o <= 7; o++) $(id).add(new Option(kHz(o * 5), String(o)));
+}
+$('swFrom').value = '-4';
+$('swTo').value = '4';
+$('swStart').addEventListener('click', runSweep);
+$('swStop').addEventListener('click', () => { sweeping = false; });
+$('boardReset').addEventListener('click', () => {
+  if (!stream) return;
+  stream.board.clear();
+  stream.setAt = stream.done;
+  if (stream.cur !== null) stream.entry(stream.cur);
+  info('🏆 Leaderboard reset.');
+  renderBoard();
+});
+$('minSec').addEventListener('change', renderBoard);
+/* One listener: the table is redrawn every second. */
+$('boardBody').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-s]');
+  if (!b || b.disabled) return;
+  const set = Number(b.dataset.s);
+  info(`🏆 Switching the radio to ${KPlug.describeSettings(set).text}.`);
+  applyCombo(comboOf({ s: set }));
+});
+newStream();
+renderStats();
+</script>
+</body>
+</html>

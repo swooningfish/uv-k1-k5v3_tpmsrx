@@ -40,6 +40,7 @@ C_FILES = (
     "dectpms.h",
     "tpmsrx_app.c",
     "tpmsdbg_app.c",
+    "tpmscap_app.c",
     "test/host_dectpms.c",
 )
 PY_FILES = (
@@ -48,12 +49,14 @@ PY_FILES = (
     "test/test_variants.py",
     "tools/mock_lcd.py",
     "tools/fetch_sdk.py",
+    "test/test_kplug.py",
 )
 MIN_C = {
     "dectpms.c": 28,
     "dectpms.h": 9,
     "tpmsrx_app.c": 28,
     "tpmsdbg_app.c": 24,
+    "tpmscap_app.c": 20,
     "test/host_dectpms.c": 12,
 }
 MIN_PY = {
@@ -62,6 +65,7 @@ MIN_PY = {
     "test/test_variants.py": 9,
     "tools/mock_lcd.py": 19,
     "tools/fetch_sdk.py": 2,
+    "test/test_kplug.py": 2,
 }
 KEYWORDS = {
     "if", "for", "while", "switch", "do", "defined", "sizeof", "return",

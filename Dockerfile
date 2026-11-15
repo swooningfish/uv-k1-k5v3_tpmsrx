@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        bash ca-certificates curl python3 gcc libc6-dev xz-utils \
+        bash ca-certificates curl python3 gcc libc6-dev xz-utils nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Same ARM GNU release as the F4HWN firmware image. x86_64 only.

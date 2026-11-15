@@ -196,6 +196,48 @@ def test_dbg_app() -> None:
     check(0 <= i_key < i_ref, "redraw counter runs after the key-poll gate")
 
 
+def test_cap_app() -> None:
+    """Check that the K-plug capture app streams safely and is built."""
+    print("K-plug capture (tpmscap_app.c)")
+    src = read("tpmscap_app.c")
+    sh = read("build.sh")
+    tool = read("tools/kplug.html")
+    check('tpmscap_app.c' in sh and 'TPMS CAP' in sh, "build.sh packs TPMS CAP")
+    check(all(f"->{fn}(" not in src for fn in ("blit_full", "blit_status", "viewer_update")),
+          "no K5Viewer frames mixed into the stream")
+    check("uartClose()" in src and "USART1_BRR = g.brr;" in src,
+          "the K-plug baud rate is restored on exit")
+    check("CR3_OVER8" in src, "the baud change is skipped for an unknown UART mode")
+    check("IF_PRESET[g.ifp]" in src and "foffSteps() * FOFF_STEP" in src,
+          "same IF presets and tuning offset as TPMS EU / NA")
+    check("case APP_KEY_0:" in src and "LIGHT_ICON" in src and "BL_ALWAYS" in src,
+          "0 forces the backlight, as in TPMS EU")
+    rx = read("tpmsrx_app.c")
+    gate = "SENS_GATE[SENS_LEVELS] = { 60u, 40u, 28u };"
+    check("case APP_KEY_3:" in src and gate in src and gate in rx,
+          "3 cycles the same SENS levels as the TPMS EU menu")
+    check("queue((uint8_t)(g.sens | (g.light << 2)));" in src and "this.pendingSet = 2;" in tool,
+          "the SENS level and the backlight travel in the settings record")
+    check("#define CMD_SYNC       0xA5u" in src and "const CMD_SYNC = 0xA5;" in tool,
+          "both ends use the same command sync byte")
+    check("b == (uint8_t)~g.rxCmd" in src and "c ^ 0xFF" in tool,
+          "commands carry an inverted check byte")
+    nibbles = ("band: 0x10", "ifp: 0x20", "offset: 0x30", "sens: 0x40", "light: 0x50",
+               "clear: 0x60", "report: 0x70")
+    check(all(n in tool for n in nibbles) and all(f"case {i}u:" in src for i in range(1, 8)),
+          "the page and the radio agree on the command fields")
+    check("USART1_CR3 = g.cr3 & ~CR3_DMAR;" in src and "USART1_CR3 = g.cr3;" in src,
+          "the K-plug receive DMA is handed back on exit")
+    check("CMD_GAP_MS" in tool and "sendChain" in tool,
+          "the page spaces commands: TPMS CAP holds one until its next key poll")
+    check('id="offSlider" type="range" min="-8" max="7" step="1"' in tool,
+          "the offset slider covers the radio's -40 to +35 kHz in 5 kHz steps")
+    for mark in ("MARK_GAP", "MARK_SET", "MARK_HIT"):
+        check(f"#define {mark}" in src and mark in tool, f"{mark} shared with kplug.html")
+    check("const BAUD = 115200;" in tool and "K-PLUG 115200:" in src,
+          "both ends use 115200 baud")
+
+
 def test_build_flavours() -> None:
     """Check that build.sh builds every flavour from one source."""
     print("Build flavours (build.sh)")
@@ -215,6 +257,7 @@ def main() -> int:
     test_layout_source()
     test_assets_and_flavours()
     test_dbg_app()
+    test_cap_app()
     test_build_flavours()
     if fails:
         print(f"{fails} check(s) failed")

@@ -88,6 +88,7 @@ A good decode blinks the green LED, even with the backlight off.
 
 `UP` / `DOWN` (the navigation keys on the UV-K1) select an item. `MENU`, `2`
 or `5` change it. `EXIT` closes the menu. The menu also shows the app version.
+Decoding pauses while the menu is open, so a sensor that sends then is missed.
 
 ### The screen
 

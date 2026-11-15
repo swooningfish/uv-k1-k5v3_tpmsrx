@@ -362,7 +362,7 @@ static void put_bit(dectpms_t *d, uint8_t bit)
  */
 void dectpms_init(dectpms_t *d, uint8_t mode)
 {
-    d->mean = (int32_t)BIAS << 4;
+    d->mean = 0;      /* push() removes BIAS first, so the DC estimate starts at 0 */
     d->amp = 0;
     d->phase = 0;
     d->win = 0;

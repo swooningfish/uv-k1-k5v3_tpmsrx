@@ -698,12 +698,12 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             g.menuSel = (uint8_t)n;
             return false;
         }
-        if (key == APP_KEY_EXIT) {
+        if (key == APP_KEY_EXIT)
             g.menu = 0;
-            return false;
-        }
-        if (key == APP_KEY_MENU || key == APP_KEY_2 || key == APP_KEY_5)
+        else if (key == APP_KEY_MENU || key == APP_KEY_2 || key == APP_KEY_5)
             menuChange(dec);
+        /* Decoding pauses in the menu, so drop the partial burst it cut off. */
+        if (!g.menu) dectpms_rearm(dec);
         return false;
     }
 

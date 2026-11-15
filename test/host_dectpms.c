@@ -139,56 +139,272 @@ static void test_schrader(void)
 }
 
 /**
- * Append the first nbits of a byte buffer to the slicer, MSB first.
+ * Unpack the first nbits of a byte buffer, MSB first, one bit per byte.
  *
- * @param d Slicer collecting an OOK burst.
+ * @param out Destination, one bit per byte, starting at out[at].
+ * @param at First index to write.
  * @param b Source bytes.
- * @param nbits Number of bits to append.
+ * @param nbits Number of bits.
+ * @return Index after the last bit written.
  */
-static void put_bytes(dectpms_t *d, const uint8_t *b, unsigned nbits)
+static unsigned unpack(uint8_t *out, unsigned at, const uint8_t *b, unsigned nbits)
 {
     for (unsigned i = 0; i < nbits; i++)
-        put_bit(d, (uint8_t)((b[i >> 3] >> (7u - (i & 7u))) & 1u));
+        out[at++] = (uint8_t)((b[i >> 3] >> (7u - (i & 7u))) & 1u);
+    return at;
+}
+
+/**
+ * Turn OOK data bits into the Manchester chips the slicer collects.
+ *
+ * Bit 0 of a burst is 0, and its first chip is the idle before the
+ * carrier, so only its "on" chip is kept. A 1 is on then off, a 0 is off
+ * then on, as rtl_433's zero-bit slicer reads them.
+ *
+ * @param chips Destination, one chip per byte.
+ * @param bits Data bits, one per byte.
+ * @param n Number of bits.
+ * @return Number of chips.
+ */
+static unsigned to_chips(uint8_t *chips, const uint8_t *bits, unsigned n)
+{
+    unsigned c = 0;
+    chips[c++] = 1;
+    for (unsigned i = 1; i < n; i++) {
+        chips[c++] = bits[i];
+        chips[c++] = (uint8_t)!bits[i];
+    }
+    return c;
+}
+
+/**
+ * Build the data bits of a Schrader or BMW burst.
+ *
+ * @param bits Destination, one bit per byte.
+ * @param bmw Nonzero for BMW (61 bits), zero for Schrader (68 bits).
+ * @param crc_ok Zero breaks the Schrader CRC.
+ * @return Number of bits.
+ */
+static unsigned ook_bits(uint8_t *bits, int bmw, int crc_ok)
+{
+    static const uint8_t bmw_sync[2] = {0x7F, 0xFF};
+    static const uint8_t bmw_body[6] = {0x02, 0x01, 0x8A, 0xCC, 0x86, 0x30};
+    static const uint8_t schr_sync = 0x70; /* sync nibble 7 */
+    uint8_t schr[8] = {0xF6, 0x70, 0x3A, 0x38, 0xB2, 132, 62, 0};
+    unsigned n;
+    if (bmw) {
+        n = unpack(bits, 0, bmw_sync, 16);
+        return unpack(bits, n, bmw_body, 45);
+    }
+    schr[7] = crc8_ref(schr, 7, 0x07u, 0xf0u);
+    if (!crc_ok) schr[7] ^= 1u;
+    n = unpack(bits, 0, &schr_sync, 4);
+    return unpack(bits, n, schr, 64);
+}
+
+/**
+ * Load chips into a fresh OOK slicer, then the two off chips that end it.
+ *
+ * @param d Slicer to fill.
+ * @param chips One chip per byte.
+ * @param n Number of chips.
+ */
+static void load_chips(dectpms_t *d, const uint8_t *chips, unsigned n)
+{
+    dectpms_init(d, TPMS_MODE_OOK);
+    for (unsigned i = 0; i < n; i++) put_bit(d, chips[i]);
+    put_bit(d, 0);
+    put_bit(d, 0);
 }
 
 /**
  * Run whole OOK bursts through the parser chain the EU2 / NA2 apps use.
  *
- * Schrader shares the chain with EG53, BMW and Nissan, so a BMW burst
- * must come out as BMW and a Schrader burst as Schrader.
+ * The chips are Manchester-decoded first, as rtl_433 does. Schrader shares
+ * the chain with EG53, BMW and Nissan, so a BMW burst must come out as BMW
+ * and a Schrader burst as Schrader.
  */
 static void test_ook_chain(void)
 {
-    static const uint8_t bmw_sync[2] = {0x7F, 0xFF};
-    static const uint8_t bmw[6] = {0x02, 0x01, 0x8A, 0xCC, 0x86, 0x30};
-    static const uint8_t schr_sync = 0x70; /* sync nibble 7 */
-    uint8_t schr[8] = {0xF6, 0x70, 0x3A, 0x38, 0xB2, 132, 62, 0};
+    uint8_t bits[128], chips[260];
+    unsigned n;
     dectpms_t d;
     tpms_pkt_t o;
 
-    /* BMW: 16-bit sync then the 46-bit body, 62 bits in all. */
-    dectpms_init(&d, TPMS_MODE_OOK);
-    put_bytes(&d, bmw_sync, 16);
-    put_bytes(&d, bmw, 46);
+    n = ook_bits(bits, 1, 1);
+    load_chips(&d, chips, to_chips(chips, bits, n));
     memset(&o, 0, sizeof o);
     expect(finish_ook(&d, &o), "ook chain takes a bmw burst");
     expect(o.model == TPMS_BMW, "ook chain bmw burst is bmw, not schrader");
 
-    /* Schrader: sync nibble then 64 bits, 68 bits in all. */
-    schr[7] = crc8_ref(schr, 7, 0x07u, 0xf0u);
-    dectpms_init(&d, TPMS_MODE_OOK);
-    put_bytes(&d, &schr_sync, 4);
-    put_bytes(&d, schr, 64);
+    n = ook_bits(bits, 0, 1);
+    load_chips(&d, chips, to_chips(chips, bits, n));
     memset(&o, 0, sizeof o);
     expect(finish_ook(&d, &o), "ook chain takes a schrader burst");
     expect(o.model == TPMS_SCHR && o.id == 0x003A38B2u, "ook chain schrader burst is schrader");
 
-    /* A Schrader burst with a bad CRC must not come out as anything. */
-    schr[7] ^= 1u;
-    dectpms_init(&d, TPMS_MODE_OOK);
-    put_bytes(&d, &schr_sync, 4);
-    put_bytes(&d, schr, 64);
+    /* Data bits handed over as if they were chips must not decode. */
+    load_chips(&d, bits, n);
+    expect(!finish_ook(&d, &o), "ook chain needs manchester chips, not bits");
+
+    n = ook_bits(bits, 0, 0);
+    load_chips(&d, chips, to_chips(chips, bits, n));
     expect(!finish_ook(&d, &o), "ook chain drops a bad schrader burst");
+}
+
+static unsigned rng_state;
+
+/**
+ * Small deterministic noise source.
+ *
+ * @return Uniform noise, -1 to 1.
+ */
+static double noise1(void)
+{
+    rng_state = rng_state * 1103515245u + 12345u;
+    return ((double)((rng_state >> 8) & 0xffffu) / 32768.0) - 1.0;
+}
+
+/**
+ * Render chips as AF samples at 38.4 kHz and feed them to the slicer.
+ *
+ * Edges go through a one-pole low-pass and a little noise is added.
+ * FSK chips swing either side of mid-scale with discriminator noise around
+ * the burst. OOK chips are carrier on or off, with silence around it.
+ *
+ * @param mode TPMS_MODE_FSK or TPMS_MODE_OOK.
+ * @param chips One chip per byte.
+ * @param n Number of chips.
+ * @param us Chip length in microseconds.
+ * @param phase Start offset in samples, 0 to 1.
+ * @param invert Nonzero flips the demodulator polarity.
+ * @param out Filled with the last packet.
+ * @return Number of packets decoded.
+ */
+static int feed(uint8_t mode, const uint8_t *chips, unsigned n, double us,
+                double phase, int invert, tpms_pkt_t *out)
+{
+    dectpms_t d;
+    double spc = 38400.0 * us / 1e6, y = 0;
+    unsigned lead = 300u, total = lead + (unsigned)(n * spc) + 600u;
+    int hits = 0;
+    dectpms_init(&d, mode);
+    for (unsigned s = 0; s < total; s++) {
+        double lvl, idle = (mode == TPMS_MODE_FSK) ? (noise1() > 0 ? 1.0 : -1.0) : 0.0;
+        unsigned ci = (s < lead) ? n : (unsigned)((s - lead + phase) / spc);
+        if (ci < n) lvl = chips[ci] ? 1.0 : (mode == TPMS_MODE_FSK ? -1.0 : 0.0);
+        else lvl = idle;
+        y += 0.7 * (lvl - y);
+        double v = invert ? -y : y;
+        uint16_t x = (uint16_t)(2048.0 + 600.0 * v + 40.0 * noise1());
+        if (dectpms_push(&d, x, out)) {
+            hits++;
+            dectpms_rearm(&d);
+        }
+    }
+    return hits;
+}
+
+/**
+ * Count the start phases at which a burst decodes to the expected sensor.
+ *
+ * @param mode TPMS_MODE_FSK or TPMS_MODE_OOK.
+ * @param chips One chip per byte.
+ * @param n Number of chips.
+ * @param us Chip length in microseconds.
+ * @param invert Nonzero flips the demodulator polarity.
+ * @param model Expected model.
+ * @param id Expected id.
+ * @return Number of the five phases that decoded correctly.
+ */
+static int phases_ok(uint8_t mode, const uint8_t *chips, unsigned n, double us,
+                     int invert, uint8_t model, uint32_t id)
+{
+    int ok = 0;
+    for (int ph = 0; ph < 5; ph++) {
+        tpms_pkt_t o;
+        rng_state = 11u + (unsigned)ph;
+        memset(&o, 0, sizeof o);
+        if (feed(mode, chips, n, us, ph * 0.2, invert, &o) && o.model == model && o.id == id)
+            ok++;
+    }
+    return ok;
+}
+
+/**
+ * Feed Ford and Toyota FSK bursts as samples, in both polarities.
+ *
+ * rtl_433 sees Ford as 55 55 55 56 and decodes the inverted payload.
+ * Toyota is not inverted; its lead-in 0101 0101 0011 11 holds the A9E sync.
+ * Either discriminator polarity must decode.
+ */
+static void test_fsk_samples(void)
+{
+    static const uint8_t ford_pre[4] = {0x55, 0x55, 0x55, 0x56};
+    static const uint8_t toyt_pre[2] = {0x55, 0x3C};
+    uint8_t ford[8] = {0xA1, 0xB2, 0xC3, 0xD4, 144, 56 + 18, 0x04, 0};
+    uint8_t toyt[9] = {0x00, 0xF2, 0x11, 0xA9, 0, 0, 0, 0, 0};
+    uint8_t fc[200], tc[200];
+    unsigned nf, nt, p = 140, t = 41;
+    uint8_t last;
+    char msg[64];
+
+    ford[7] = (uint8_t)(ford[0] + ford[1] + ford[2] + ford[3] + ford[4] + ford[5] + ford[6]);
+    nf = unpack(fc, 0, ford_pre, 32);
+    for (unsigned i = 0; i < 64u; i++) {
+        uint8_t b = (uint8_t)((ford[i >> 3] >> (7u - (i & 7u))) & 1u);
+        fc[nf++] = b;              /* air is the inverse of (!b, b) */
+        fc[nf++] = (uint8_t)!b;
+    }
+
+    toyt[4] = (uint8_t)((p >> 1) & 0x7fu);
+    toyt[5] = (uint8_t)(((p & 1u) << 7) | ((t >> 1) & 0x7fu));
+    toyt[6] = (uint8_t)((t & 1u) << 7);
+    toyt[7] = (uint8_t)(p ^ 0xffu);
+    toyt[8] = crc8_ref(toyt, 8, 0x07u, 0x80u);
+    nt = unpack(tc, 0, toyt_pre, 14);
+    last = tc[nt - 1];
+    for (unsigned i = 0; i < 72u; i++) {
+        uint8_t b = (uint8_t)((toyt[i >> 3] >> (7u - (i & 7u))) & 1u);
+        uint8_t c1 = (uint8_t)!last, c2 = b ? c1 : (uint8_t)!c1;
+        tc[nt++] = c1;
+        tc[nt++] = c2;
+        last = c2;
+    }
+    for (unsigned i = 0; i < 3u; i++) {
+        last = (uint8_t)!last;
+        tc[nt++] = last;
+    }
+
+    for (int inv = 0; inv < 2; inv++) {
+        int ok = phases_ok(TPMS_MODE_FSK, fc, nf, 52, inv, TPMS_FORD, 0xA1B2C3D4u);
+        snprintf(msg, sizeof msg, "ford samples, polarity %d: %d/5", inv, ok);
+        expect(ok >= 4, msg);
+        ok = phases_ok(TPMS_MODE_FSK, tc, nt, 52, inv, TPMS_TOYT, 0x00F211A9u);
+        snprintf(msg, sizeof msg, "toyota samples, polarity %d: %d/5", inv, ok);
+        expect(ok >= 4, msg);
+    }
+}
+
+/**
+ * Feed Schrader and BMW OOK bursts as samples, in both AM polarities.
+ */
+static void test_ook_samples(void)
+{
+    uint8_t bits[128], chips[260];
+    char msg[64];
+
+    for (int bmw = 0; bmw < 2; bmw++) {
+        unsigned n = to_chips(chips, bits, ook_bits(bits, bmw, 1));
+        for (int inv = 0; inv < 2; inv++) {
+            int ok = phases_ok(TPMS_MODE_OOK, chips, n, 120, inv,
+                               bmw ? TPMS_BMW : TPMS_SCHR,
+                               bmw ? 0x00100C56u : 0x003A38B2u);
+            snprintf(msg, sizeof msg, "%s samples, polarity %d: %d/5",
+                     bmw ? "bmw" : "schrader", inv, ok);
+            expect(ok >= 4, msg);
+        }
+    }
 }
 
 /**
@@ -283,6 +499,8 @@ int main(void)
 {
     fails = 0;
     test_ook_chain();
+    test_fsk_samples();
+    test_ook_samples();
     test_ford();
     test_toyota();
     test_schrader();

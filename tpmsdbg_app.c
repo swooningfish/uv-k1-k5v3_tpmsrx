@@ -343,15 +343,16 @@ static void push(uint16_t sample)
     }
 
     step = g.fsk ? STEP_FSK : STEP_OOK;
+    /* Same clock recovery as dectpms: on an edge seen at sample rate, pull
+       the phase halfway toward 32768 + step / 2. */
+    if (lvl != g.half) {
+        int32_t want = 32768 + (int32_t)(step >> 1);
+        g.half = lvl;
+        g.phase = (uint16_t)((int32_t)g.phase + (want - (int32_t)g.phase) / 2);
+    }
     prev = g.phase;
     g.phase = (uint16_t)(g.phase + step);
     if (g.phase >= prev) return;
-
-    if (lvl != g.half) {
-        if (g.phase > 32768u) g.phase = (uint16_t)(g.phase - 8192u);
-        else g.phase = (uint16_t)(g.phase + 8192u);
-    }
-    g.half = lvl;
     if (g.bitn < CAP_BITS) {
         uint8_t i = g.bitn;
         uint8_t mask = (uint8_t)(0x80u >> (i & 7u));

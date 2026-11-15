@@ -8,6 +8,7 @@
 #define STEP_OOK 14245u   /* ~4.608 samples per 120 us half-bit */
 #define GAP_FSK  8u
 #define GAP_OOK  24u
+#define TOYT_BITS 148u
 
 enum { ST_HUNT = 0, ST_FORD = 1, ST_TOYT = 2, ST_DONE = 4 };
 
@@ -388,7 +389,7 @@ void dectpms_rearm(dectpms_t *d)
     raw_clear(d);
 }
 
-#if TPMS_HAVE_EG53 || TPMS_HAVE_BMW
+#if TPMS_HAVE_OOK
 /**
  * Copy a bit range into a fresh MSB-first buffer.
  *
@@ -440,63 +441,89 @@ static bool finish_toyota(dectpms_t *d, tpms_pkt_t *out)
 }
 #endif
 
+#if TPMS_HAVE_OOK
+/**
+ * Manchester-decode an OOK burst the way rtl_433's zero-bit slicer does.
+ *
+ * The raw buffer holds 120 us half-bit chips from the first sample with
+ * carrier, so chip 0 is the "on" level whatever the AM polarity. That
+ * first rising edge is the middle of a 0 bit, as in rtl_433. Each later
+ * pair is one bit: on then off is 1, off then on is 0. A pair of equal
+ * chips (the carrier dropping) ends the message.
+ *
+ * @param raw Packed chips, MSB first.
+ * @param nraw Number of chips.
+ * @param out Packed data bits. Must hold max bits.
+ * @param max Capacity of out, in bits.
+ * @return Number of data bits written.
+ */
+static unsigned ook_manchester(const uint8_t *raw, unsigned nraw, uint8_t *out, unsigned max)
+{
+    unsigned n = 0, j = 1;
+    uint8_t on;
+    if (!nraw) return 0;
+    on = bit_at(raw, 0);
+    bit_set(out, n++, 0);
+    while (j + 1u < nraw && n < max) {
+        uint8_t a = bit_at(raw, j);
+        if (a == bit_at(raw, j + 1u)) break;
+        bit_set(out, n++, (uint8_t)(a == on));
+        j += 2u;
+    }
+    return n;
+}
+#endif
+
 #if TPMS_HAVE_SCHR
 /**
- * Take the last 68 OOK bits, drop the sync nibble, and parse Schrader.
+ * Drop the sync nibble of a 68-bit row and parse Schrader.
  *
- * @param d Slicer holding the OOK burst.
+ * @param m Manchester-decoded bits.
+ * @param n Number of bits in m.
  * @param out Filled on success.
- * @return True when 68 bits are present and the frame checks out.
+ * @return True when the row is 68 bits and the frame checks out.
  */
-static bool finish_schrader(dectpms_t *d, tpms_pkt_t *out)
+static bool finish_schrader(const uint8_t *m, unsigned n, tpms_pkt_t *out)
 {
     uint8_t b[8];
-    unsigned n = d->bitn;
-    if (n < 68u) return false;
-    /* Prefer an exact 68-bit row; if longer, use the last 68. */
-    unsigned base = (n > 68u) ? (n - 68u) : 0u;
-    for (unsigned i = 0; i < 8u; i++) b[i] = 0;
-    for (unsigned i = 0; i < 64u; i++)
-        bit_set(b, i, bit_at(d->raw, base + 4u + i));
+    if (n != 68u) return false;
+    pack_bits(m, n, 4, b, 64);
     return tpms_parse_schrader(b, out);
 }
 #endif
 
 #if TPMS_HAVE_EG53
 /**
- * Drop the 40-bit EG53 preamble and parse the 80-bit body.
+ * Drop the 40-bit EG53 preamble of a 120-bit row and parse the body.
  *
- * @param d Slicer holding the OOK burst.
+ * @param m Manchester-decoded bits.
+ * @param n Number of bits in m.
  * @param out Filled on success.
- * @return True when 120 bits are present and the frame checks out.
+ * @return True when the row is 120 bits and the frame checks out.
  */
-static bool finish_eg53(dectpms_t *d, tpms_pkt_t *out)
+static bool finish_eg53(const uint8_t *m, unsigned n, tpms_pkt_t *out)
 {
     uint8_t b[10];
-    unsigned base = (d->bitn > 120u) ? (d->bitn - 120u) : 0u;
-    if (d->bitn < 120u) return false;
-    pack_bits(d->raw, d->bitn, base + 40u, b, 80);
+    if (n != 120u) return false;
+    pack_bits(m, n, 40, b, 80);
     return tpms_parse_eg53(b, out);
 }
 #endif
 
 #if TPMS_HAVE_BMW
 /**
- * Check the BMW 16-bit sync and parse the following 46 bits.
+ * Check the BMW 16-bit sync of a 61-bit row and parse the next 46 bits.
  *
- * @param d Slicer holding the OOK burst.
+ * @param m Manchester-decoded bits.
+ * @param n Number of bits in m.
  * @param out Filled on success.
- * @return True when the sync and the frame both check out.
+ * @return True when the row is 61 bits and the sync and frame check out.
  */
-static bool finish_bmw(dectpms_t *d, tpms_pkt_t *out)
+static bool finish_bmw(const uint8_t *m, unsigned n, tpms_pkt_t *out)
 {
     uint8_t b[6];
-    uint16_t w = 0;
-    if (d->bitn < 61u) return false;
-    for (unsigned i = 0; i < 16u; i++)
-        w = (uint16_t)((w << 1) | bit_at(d->raw, i));
-    if (w != 0x7FFFu) return false;
-    pack_bits(d->raw, d->bitn, 16, b, 46);
+    if (n != 61u || m[0] != 0x7Fu || m[1] != 0xFFu) return false;
+    pack_bits(m, n, 16, b, 46);
     return tpms_parse_bmw(b, out);
 }
 #endif
@@ -554,22 +581,21 @@ static bool finish_nis(dectpms_t *d, tpms_pkt_t *out)
  */
 static bool finish_ook(dectpms_t *d, tpms_pkt_t *out)
 {
-    unsigned n = d->bitn;
+    uint8_t m[16] = {0};
+    unsigned n = ook_manchester(d->raw, d->bitn, m, 128);
 #if TPMS_HAVE_EG53
-    if (n >= 120u && finish_eg53(d, out)) return true;
+    if (finish_eg53(m, n, out)) return true;
 #endif
 #if TPMS_HAVE_BMW
-    if (n >= 61u && n < 120u && finish_bmw(d, out)) return true;
+    if (finish_bmw(m, n, out)) return true;
 #endif
+    /* Nissan and Subaru are PCM: they decode the raw chips themselves. */
 #if TPMS_HAVE_NIS
     if (finish_nis(d, out)) return true;
 #endif
-    /* Schrader goes last: it only has a CRC-8 over the tail of any burst,
-       so the parsers with a sync word or pattern get first claim. */
 #if TPMS_HAVE_SCHR
-    if (n >= 68u && finish_schrader(d, out)) return true;
+    if (finish_schrader(m, n, out)) return true;
 #endif
-    (void)n;
     return false;
 }
 #endif /* TPMS_HAVE_OOK */
@@ -587,6 +613,30 @@ static void hunt_again(dectpms_t *d)
     d->state = ST_HUNT;
     d->win = 0;
     raw_clear(d);
+}
+
+/**
+ * Start a Toyota payload when the window ends on its 12-bit sync.
+ *
+ * The sync is A9E, or 561 when the discriminator polarity is flipped.
+ * Differential Manchester does not care about polarity, so the bits are
+ * stored as they come. The last sync bit is the first payload bit.
+ * A9E can never appear inside valid Manchester data, so this may cut a
+ * Ford payload short: Toyota's alternating lead-in plus A9 reads as the
+ * Ford sync 55 56 or AA A9 first.
+ *
+ * @param d Slicer state.
+ * @param w16 Last 16 bits seen.
+ * @return True when the sync matched and the payload was started.
+ */
+static bool toyota_sync(dectpms_t *d, uint16_t w16)
+{
+    uint16_t w12 = (uint16_t)(w16 & 0x0fffu);
+    if (w12 != 0x0a9eu && w12 != 0x0561u) return false;
+    d->state = ST_TOYT;
+    raw_clear(d);
+    put_bit(d, (uint8_t)(w16 & 1u));
+    return true;
 }
 #endif
 
@@ -606,20 +656,15 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
 #if TPMS_HAVE_FSK
         if (d->mode == TPMS_MODE_FSK) {
             uint16_t w16 = (uint16_t)(d->win & 0xffffu);
-            /* Ford searches AA A9 after invert; raw air is 55 56. */
+            /* rtl_433 inverts the air bits (55 56) and decodes what follows
+               AA A9, so seeing 55 56 means the payload must be inverted. */
             if (w16 == 0x5556u || w16 == 0xaaa9u) {
                 d->state = ST_FORD;
-                d->inv = (w16 == 0xaaa9u) ? 1u : 0u;
+                d->inv = (w16 == 0x5556u) ? 1u : 0u;
                 raw_clear(d);
                 return;
             }
-            /* Toyota 12-bit preamble A9E (from A9 E0); keep its last bit. */
-            if ((w16 & 0x0fffu) == 0x0a9eu) {
-                d->state = ST_TOYT;
-                raw_clear(d);
-                put_bit(d, (uint8_t)(w16 & 1u));
-                return;
-            }
+            if (toyota_sync(d, w16)) return;
         } else
 #endif
             put_bit(d, bit);
@@ -628,6 +673,7 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
 
 #if TPMS_HAVE_FSK
     if (d->state == ST_FORD) {
+        if (toyota_sync(d, (uint16_t)(d->win & 0xffffu))) return;
         put_bit(d, (uint8_t)(bit ^ d->inv));
         if (d->bitn >= 128u) {
             if (finish_ford(d, out)) *hit = true;
@@ -638,7 +684,8 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
 
     if (d->state == ST_TOYT) {
         put_bit(d, bit);
-        if (d->bitn >= 160u) {
+        /* 1 sync bit + 72 bits of 2 chips, plus a little slack. */
+        if (d->bitn >= TOYT_BITS) {
             if (finish_toyota(d, out)) *hit = true;
             else hunt_again(d);
         }
@@ -690,20 +737,32 @@ bool dectpms_push(dectpms_t *d, uint16_t sample, tpms_pkt_t *out)
             dectpms_rearm(d);
             return hit;
         }
+        /* An OOK burst starts with the carrier: idle chips before it would
+           shift the Manchester pairs, so the clock waits for signal. The
+           first sample with signal then always counts as an edge, so the
+           clock aligns to it even when the AM output is inverted. */
+        if (d->mode == TPMS_MODE_OOK && !d->bitn) {
+            d->half = 2u;
+            return false;
+        }
     } else {
         d->gap = 0;
     }
 
     uint16_t step = (d->mode == TPMS_MODE_FSK) ? STEP_FSK : STEP_OOK;
+    /* Clock recovery at sample rate. On an edge, pull the phase halfway
+       toward 32768 + step / 2, so the wrap (the bit sample) lands on the
+       first sample of the new chip for FSK and about a third of the way
+       into it for OOK. Chosen on simulated bursts: it beats aiming for the
+       middle, which sits on the wrap boundary at 2 samples per chip. */
+    if (lvl != d->half) {
+        int32_t want = 32768 + (int32_t)(step >> 1);
+        d->half = lvl;
+        d->phase += (want - d->phase) / 2;
+    }
     d->phase = (int32_t)((uint32_t)d->phase + step);
     if (d->phase < 65536) return false;
     d->phase -= 65536;
-
-    if (lvl != d->half) {
-        if (d->phase > 32768) d->phase -= 8192;
-        else d->phase += 8192;
-    }
-    d->half = lvl;
 
     bool hit = false;
     on_bit(d, lvl, out, &hit);

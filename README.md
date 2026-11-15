@@ -19,10 +19,10 @@ asset strings. There are no separate regional `.c` trees.
 
 | App | Where | Default band | Default mode | Cars | Signal | Size |
 |---|---|---|---|---|---|---|
-| `TPMS EU` | UK and Europe | 433.92 MHz | FSK | Ford, Toyota | FSK | 3488 B |
-| `TPMS NA` | United States and Canada | 315 MHz | FSK | Ford, Toyota | FSK | 3488 B |
-| `TPMS EU2` | UK and Europe | 433.92 MHz (fixed) | OOK | Schrader MRXGG4; Vauxhall, Opel, Saab; BMW and Mini with the Schrader sensor | OOK | 3428 B |
-| `TPMS NA2` | United States and Canada | 315 MHz | OOK | Schrader MRXGG4; Chevrolet and other GM; Subaru; Nissan and Infiniti | OOK | 3540 B |
+| `TPMS EU` | UK and Europe | 433.92 MHz | FSK | Ford, Toyota | FSK | 3564 B |
+| `TPMS NA` | United States and Canada | 315 MHz | FSK | Ford, Toyota | FSK | 3564 B |
+| `TPMS EU2` | UK and Europe | 433.92 MHz (fixed) | OOK | Schrader MRXGG4; Vauxhall, Opel, Saab; BMW and Mini with the Schrader sensor | OOK | 3456 B |
+| `TPMS NA2` | United States and Canada | 315 MHz | OOK | Schrader MRXGG4; Chevrolet and other GM; Subaru; Nissan and Infiniti | OOK | 3648 B |
 | `TPMS DBG` | Either band, no decode | 433.92 MHz | FSK | Records raw bursts | FSK or OOK | 3916 B |
 
 Each list app has one demod. `TPMS EU` and `TPMS NA` are the FSK apps,

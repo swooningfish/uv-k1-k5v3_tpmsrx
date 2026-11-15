@@ -103,7 +103,10 @@ void *memset(void *d, int c, size_t n)
 #define BL_TIME_ADDR   0x00A00Du
 #define BL_ALWAYS      61u
 #define BATT_RESERVE   48u
-/* OOK chip (120 us) at which RSSI is read: about 2 ms into the burst. */
+/* OOK chip (120 us) at which RSSI is read: about 2 ms into the burst.
+ * That is inside a Schrader frame (it has no preamble), but the host test
+ * shows the slicer rides out a read that stalls sampling for up to 9
+ * samples (~230 us). TPMS DBG shows the worst read as S. */
 #define RSSI_CHIP      16u
 /* Visible characters on one 128 px row of 4 px tiny glyphs. */
 #define ROW_CHARS      32
@@ -876,7 +879,8 @@ __attribute__((section(".text.entry"), used))
 void app_main(const app_api_t *api)
 {
     row_t rows[ROWS];
-    uint8_t cfg[4];
+    /* Zeroed so a first launch with nothing saved never reads stack junk. */
+    uint8_t cfg[4] = {0};
     char ui[UI_SIZE] __attribute__((aligned(4)));
     uint16_t r43, r2b, r73;
 

@@ -530,6 +530,9 @@ static bool finish_bmw(const uint8_t *m, unsigned n, tpms_pkt_t *out)
 #endif
 
 #if TPMS_HAVE_NIS
+#define NIS_PRE_MIN 18u
+#define NIS_ROW_MAX 119u
+
 /**
  * Find the first 16-bit pattern in a packed bit row.
  *
@@ -563,6 +566,10 @@ static bool finish_nis(dectpms_t *d, tpms_pkt_t *out)
     uint8_t pkt[5];
     if (at < 0) return false;
     pos = (unsigned)at + 14u;
+    /* rtl_433 takes a row of 94 to 119 chips: at least 18 preamble chips,
+       and the 76 data chips ending before chip 120. The raw buffer runs on
+       past the carrier, so bound the data start instead of the row. */
+    if (pos < NIS_PRE_MIN || pos + 76u > NIS_ROW_MAX) return false;
     if (pos + 76u > d->bitn) return false;
     for (unsigned i = 0; i < 5u; i++) pkt[i] = 0;
     if (man_decode(d->raw, pos, d->bitn, pkt, 38) < 38u) return false;

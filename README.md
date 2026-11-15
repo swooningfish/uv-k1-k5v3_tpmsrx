@@ -152,6 +152,11 @@ If the list stays on `LISTENING`:
 If `TPMS DBG` records bursts but no list app shows the sensor, that sensor
 model is probably not supported.
 
+Close any screen capture (UV Studio or K5Viewer over the K-plug) while you
+listen. The app sends the viewer a frame every half second, and on the
+K-plug each frame takes up to 0.3 s, during which the app hears nothing.
+Over USB the frames are short.
+
 ## How a reading is checked
 
 The field layouts follow [`rtl_433`](https://github.com/merbanan/rtl_433).

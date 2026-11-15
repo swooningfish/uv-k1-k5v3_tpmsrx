@@ -374,6 +374,15 @@ static void meterTick(void)
 }
 
 /**
+ * Restart T and relearn the idle RSSI baseline, which a park changes.
+ */
+static void relearn(void)
+{
+    g.t0 = g.A->ticks_ms();
+    g.rbOk = 0;  /* spiking clears on the first tick after the relearn */
+}
+
+/**
  * Track the idle RSSI baseline and count jumps above it as wake attempts.
  *
  * Nothing is learned for SETTLE_MS. The baseline then follows quickly until
@@ -718,11 +727,13 @@ static bool keys(void)
             g.band433 ^= 1u;
             applyRf();
             rearm();
+            relearn();
             break;
         case APP_KEY_STAR:
             g.fsk ^= 1u;
             applyRf();
             rearm();
+            relearn();
             break;
         case APP_KEY_5:
             g.afPk = 0;
@@ -732,10 +743,9 @@ static bool keys(void)
             g.bursts = 0;
             g.wakes = 0;
             g.matched = 0;
-            g.rbOk = 0;
             g.cKey = 0;
             g.cRssi = 0;
-            g.t0 = g.A->ticks_ms();
+            relearn();
             g.showN = 0;
             memset(g.show, 0, sizeof g.show);
             rearm();

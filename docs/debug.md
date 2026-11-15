@@ -42,10 +42,10 @@ speaker icon while the speaker is on. Under it are four rows:
 
 | Row | Format | Meaning |
 |---|---|---|
-| 1 | `R<now> <peak> K<us> S<us>` | Signal strength in dBm now, and the strongest since launch or `5`. `K` is the longest key poll and `S` the longest signal-strength read, in microseconds, since launch or `5`. Sampling stops during both. One sample is 26 us, so a value well over 26 means the list apps lose part of a burst when a poll or read lands inside it |
+| 1 | `R<now> <peak> K<us> S<us>` | Signal strength in dBm now, and the strongest since launch or `5`. `K` is the longest key poll and `S` the longest signal-strength read, in microseconds, since launch or `5`. Sampling stops during both. One sample is 26 us, so a value well over 26 means the list apps lose part of a burst when a poll or read lands inside it. `TPMS EU2` / `NA2` read signal strength once inside every burst; their decoder rides out an `S` up to about 230 |
 | 2 | `A<now>/<peak> F<n> U<n> N<n>` | Loudest audio sample in the last 20 ms, and the strongest so far. `F` is the audio route: FSK should be `9`, OOK `7`, `0` is muted. `U` is `1` when the UHF antenna path read back. `N` is the number of bursts recorded |
 | 3 | `B<bits> <hex>` | Bit count of the last burst, then its first bytes in hex |
-| 4 | `T<s> Rb<dBm> W<n> M<n> L<s>` | Seconds since launch or `5`. Idle signal baseline. Wake attempts seen. Bursts recorded within 1 s of a wake attempt. Seconds since the last wake attempt (`-` until the first) |
+| 4 | `T<s> Rb<dBm> W<n> M<n> L<s>` | Seconds since launch, `5`, or a band or demod change. Idle signal baseline. Wake attempts seen. Bursts recorded within 1 s of a wake attempt. Seconds since the last wake attempt (`-` until the first) |
 
 ### Wake attempts (row 4)
 
@@ -54,6 +54,8 @@ For the first 5 seconds the app learns the quiet signal level, `Rb`. After that
 wake attempt (`W`). A burst recorded within 1 second of one also counts in `M`.
 
 Keep the radio still for the first 5 seconds, or press `5` to relearn `Rb`.
+Changing band (`2`) or demod (`*`) also relearns it, since the quiet level
+differs, so the switch itself is not counted as a wake attempt.
 
 ### Example readings
 

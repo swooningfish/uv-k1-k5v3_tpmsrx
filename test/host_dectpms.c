@@ -252,7 +252,69 @@ static void test_ook_chain(void)
     expect(!finish_ook(&d, &o), "ook chain drops a bad schrader burst");
 }
 
+/**
+ * Build the PCM chips of a Nissan / Subaru burst.
+ *
+ * The 36-chip preamble F5555555E is trimmed or lengthened, then each data
+ * bit v after the first goes out as v then !v (the parser inverts).
+ *
+ * @param chips Destination, one chip per byte.
+ * @param b Five payload bytes; the top bit of b[0] must be 1.
+ * @param skip Preamble chips dropped from the front.
+ * @param extra Alternating chips added before the preamble.
+ * @return Number of chips.
+ */
+static unsigned nis_chips(uint8_t *chips, const uint8_t *b, unsigned skip, unsigned extra)
+{
+    static const uint8_t pre[5] = {0xF5, 0x55, 0x55, 0x55, 0xE0};
+    uint8_t tmp[36];
+    unsigned c = 0;
+    for (unsigned i = 0; i < extra; i++) chips[c++] = (uint8_t)((extra - i) & 1u);
+    unpack(tmp, 0, pre, 36);
+    for (unsigned i = skip; i < 36u; i++) chips[c++] = tmp[i];
+    for (unsigned i = 1; i < 38u; i++) {
+        uint8_t v = (uint8_t)((b[i >> 3] >> (7u - (i & 7u))) & 1u);
+        chips[c++] = v;
+        chips[c++] = (uint8_t)!v;
+    }
+    return c;
+}
+
+/**
+ * Run Nissan bursts through the OOK chain, with the preamble bounds rtl_433 uses.
+ */
+static void test_nis_chain(void)
+{
+    uint8_t b[5] = {0x81, 0x23, 0x45, 0x68, 0};
+    uint8_t chips[200];
+    dectpms_t d;
+    tpms_pkt_t o;
+    for (int xx = 0; xx < 4; xx++) {
+        int sum = 0;
+        b[4] = (uint8_t)(xx << 2);
+        for (int i = 0; i < 5; i++)
+            sum += (b[i] & 3) + ((b[i] >> 2) & 3) + ((b[i] >> 4) & 3) + ((b[i] >> 6) & 3);
+        if ((sum & 3) == 1) break;
+    }
+
+    load_chips(&d, chips, nis_chips(chips, b, 0, 0));
+    memset(&o, 0, sizeof o);
+    expect(finish_ook(&d, &o), "ook chain takes a nissan burst");
+    expect(o.model == TPMS_NISS && o.id == 0x00123456u && o.psi == 32, "nissan burst fields");
+
+    load_chips(&d, chips, nis_chips(chips, b, 16, 0));
+    expect(finish_ook(&d, &o), "nissan with an 18-chip preamble");
+    load_chips(&d, chips, nis_chips(chips, b, 20, 0));
+    expect(!finish_ook(&d, &o), "nissan with a 14-chip preamble is too short");
+    load_chips(&d, chips, nis_chips(chips, b, 0, 8));
+    expect(finish_ook(&d, &o), "nissan row of 118 chips");
+    load_chips(&d, chips, nis_chips(chips, b, 0, 10));
+    expect(!finish_ook(&d, &o), "nissan row of 120 chips is too long");
+}
+
 static unsigned rng_state;
+/* Samples stalled by the RSSI read in feed(); 0 for none. */
+static unsigned stall_samples;
 
 /**
  * Small deterministic noise source.
@@ -287,7 +349,10 @@ static int feed(uint8_t mode, const uint8_t *chips, unsigned n, double us,
     dectpms_t d;
     double spc = 38400.0 * us / 1e6, y = 0;
     unsigned lead = 300u, total = lead + (unsigned)(n * spc) + 600u;
+    unsigned stall_end = 0;
     int hits = 0;
+    static uint16_t xs[4096];
+    if (total > 4096u) total = 4096u;
     dectpms_init(&d, mode);
     for (unsigned s = 0; s < total; s++) {
         double lvl, idle = (mode == TPMS_MODE_FSK) ? (noise1() > 0 ? 1.0 : -1.0) : 0.0;
@@ -296,10 +361,22 @@ static int feed(uint8_t mode, const uint8_t *chips, unsigned n, double us,
         else lvl = idle;
         y += 0.7 * (lvl - y);
         double v = invert ? -y : y;
-        uint16_t x = (uint16_t)(2048.0 + 600.0 * v + 40.0 * noise1());
+        xs[s] = (uint16_t)(2048.0 + 600.0 * v + 40.0 * noise1());
+    }
+    for (unsigned s = 0; s < total; s++) {
+        uint16_t x = xs[s];
+        /* The OOK app reads RSSI at chip RSSI_CHIP, which stalls sampling:
+           the samples due during the stall are all read when it ends. */
+        if (stall_samples && !stall_end && mode == TPMS_MODE_OOK && d.bitn >= 16u) {
+            stall_end = s + stall_samples + 1u;
+            if (stall_end >= total) stall_end = total - 1u;
+        } else if (stall_end && s < stall_end) {
+            x = xs[stall_end];
+        }
         if (dectpms_push(&d, x, out)) {
             hits++;
             dectpms_rearm(&d);
+            stall_end = 0;
         }
     }
     return hits;
@@ -405,6 +482,21 @@ static void test_ook_samples(void)
             expect(ok >= 4, msg);
         }
     }
+
+    /* The OOK app reads RSSI 16 chips in, inside a Schrader frame. The
+       slicer must ride out a read that stalls sampling for up to 9 samples
+       (~230 us); 8 is checked to keep a margin. */
+    {
+        unsigned n = to_chips(chips, bits, ook_bits(bits, 0, 1));
+        for (int inv = 0; inv < 2; inv++) {
+            int ok;
+            stall_samples = 8u;
+            ok = phases_ok(TPMS_MODE_OOK, chips, n, 120, inv, TPMS_SCHR, 0x003A38B2u);
+            stall_samples = 0;
+            snprintf(msg, sizeof msg, "schrader, 8-sample rssi stall, polarity %d: %d/5", inv, ok);
+            expect(ok >= 4, msg);
+        }
+    }
 }
 
 /**
@@ -499,6 +591,7 @@ int main(void)
 {
     fails = 0;
     test_ook_chain();
+    test_nis_chain();
     test_fsk_samples();
     test_ook_samples();
     test_ford();

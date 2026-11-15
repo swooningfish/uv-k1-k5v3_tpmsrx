@@ -31,7 +31,8 @@ Same sensors as EU; first launch parks on 315 MHz. Schrader MRXGG4 is in TPMS NA
 
 ## TPMS EU2 — UK / Europe, 433.92 OOK (fixed)
 
-Schrader MRXGG4, Vauxhall / Opel / Saab (EG53) and BMW / Mini (MRXBC5A4). Band locked.
+Schrader MRXGG4, Vauxhall / Opel / Saab (EG53) and BMW / Mini (older
+Schrader sensor, MRXBC5A4). Band locked.
 
 ![EU2 waiting](variants/eu2_waiting.png)
 
@@ -39,11 +40,27 @@ Schrader MRXGG4, Vauxhall / Opel / Saab (EG53) and BMW / Mini (MRXBC5A4). Band l
 
 ## TPMS NA2 — US / Canada, 315.00 OOK (fixed)
 
-Schrader MRXGG4, Chevrolet / GM (EG53), Subaru / Nissan. Band locked.
+Schrader MRXGG4, Chevrolet / GM (EG53), Nissan / Infiniti and Subaru. Band
+locked. Subaru shows as `NISS` on the Nissan scale, so it reads about a
+quarter high.
 
 ![NA2 waiting](variants/na2_waiting.png)
 
 ![NA2 options menu](variants/na2_menu.png)
+
+## UV Studio listing text
+
+Short descriptions for the [UV Studio Apps](https://armel.github.io/uvstudio/#apps)
+listings, each 100 characters or fewer so it fits on the card. Update these
+when a sensor moves between apps.
+
+| App | Description |
+|---|---|
+| `TPMS EU` | TPMS RX (FSK) for UK & Europe, 433.92 MHz (can switch to 315). Decodes Ford and Toyota sensors. |
+| `TPMS NA` | TPMS RX (FSK) for US & Canada, 315 MHz (can switch to 433.92). Decodes Ford and Toyota sensors. |
+| `TPMS EU2` | TPMS RX (OOK) for UK & Europe, 433.92 MHz only. Schrader MRXGG4, Vauxhall/Opel/Saab, older BMW/Mini. |
+| `TPMS NA2` | TPMS RX (OOK) for US & Canada, 315 MHz only. Schrader MRXGG4, Chevrolet/GM, Nissan/Infiniti, Subaru. |
+| `TPMS DBG` | TPMS signal debugger. Records raw FSK/OOK bursts to show why a TPMS app hears nothing. No decoding. |
 
 ## Shared gallery shots
 

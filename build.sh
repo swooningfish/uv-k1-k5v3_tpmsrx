@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 
 APP=tpmsrx
 # Release version: packed into the .app header and shown on the menu screen.
-APP_VER="1.3.1"
+APP_VER="1.3.2"
 APP_API_MIN=3
 APP_VMA=${APP_VMA:-0x20000280}
 PYTHON=${PYTHON:-python3}

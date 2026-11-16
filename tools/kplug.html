@@ -139,7 +139,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 <main>
   <h1>TPMS K-plug monitor</h1>
   <p class="sub">Decodes the bursts the <b>TPMS CAP</b> radio app streams over the K-plug cable,
-    with the rtl_433 decoders. FSK: Toyota (PMV-C210), Pacific PMV-107J and Ford. OOK: Schrader
+    with the rtl_433 decoders. FSK: Toyota (PMV-C210), Pacific PMV-107J, Ford and Renault. OOK: Schrader
     MRXGG4, GM (EG53), BMW / Mini and Nissan / Subaru.</p>
 
   <div class="grid">
@@ -181,7 +181,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
           </span>
           <span class="lbl">Demod</span>
           <span class="seg" id="cDemod">
-            <button data-v="0" title="FSK: Ford, Toyota (PMV-C210, PMV-107J)">FSK</button><button
+            <button data-v="0" title="FSK: Ford, Toyota (PMV-C210, PMV-107J), Renault">FSK</button><button
               data-v="1" title="OOK: Schrader, GM (EG53), BMW / Mini, Nissan / Subaru">OOK</button>
           </span>
           <span class="lbl">Offset<br><span id="offVal" class="offv">–</span></span>
@@ -294,7 +294,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
           <li>Close UV Studio and K5Viewer: they share the cable.</li>
           <li>Start <b>TPMS CAP</b> on the radio. It should show <code>K-PLUG 115200: KPLUG.HTML</code>.</li>
           <li>Press <b>Connect</b> and pick the cable's port.</li>
-          <li>Pick the demod: <b>FSK</b> for Ford and Toyota, <b>OOK</b> for Schrader, GM,
+          <li>Pick the demod: <b>FSK</b> for Ford, Toyota and Renault, <b>OOK</b> for Schrader, GM,
             BMW / Mini and Nissan / Subaru (key <code>4</code> on the radio).</li>
           <li>Wake the sensor next to the radio. Use <code>UP</code>/<code>DOWN</code>,
             <code>*</code> and <code>3</code> on the radio to try offsets, IF presets and
@@ -369,7 +369,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 /* TPMS CAP stream decoder for the browser (and Node, for the tests).
  *
  * Reads the stream tpmscap_app.c sends and runs the rtl_433 decoders
- * (tpms_toyota.c, tpms_pmv107j.c, tpms_ford.c) on it with two chip clocks:
+ * (tpms_toyota.c, tpms_pmv107j.c, tpms_ford.c, tpms_renault.c) on it with two
+ * chip clocks:
  * run lengths, as rtl_433 does, and the radio's own bit clock (dectpms_push).
  * The Stream class also turns what it sees into hints on what to tweak.
  */
@@ -381,7 +382,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     const MARK_GAP = 0x80;
     const MARK_SET = 0x81;
     const MARK_HIT = 0x82;
-    const RADIO_MODELS = { 0: 'FORD', 1: 'TOYOTA', 2: 'SCHRADER', 3: 'EG53', 4: 'BMW', 5: 'NISSAN' };
+    const RADIO_MODELS = { 0: 'FORD', 1: 'TOYOTA', 2: 'SCHRADER', 3: 'EG53', 4: 'BMW', 5: 'NISSAN',
+                           6: 'RENAULT' };
     const IF_PRESETS = [0x7E2C, 0x7E28, 0x7E0C, 0x7E08];
     /* REG_43 bits 5:4 pick the 25 or 12.5 kHz bandwidth mode; "alt" has bit 2,
        the gain after the FM demod, flipped. 7E2C is what every list app uses. */
@@ -620,8 +622,35 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
         return out;
     }
 
+    /** Renault: Ford's sync, 72 Manchester bits, CRC-8 poly 0x07 init 0. */
+    function renault(ch, text) {
+        const out = [];
+        for (const [pat, inv, pol] of [['0101010101010110', true, '+'],
+                                       ['1010101010101001', false, '-']]) {
+            for (const idx of findAll(text, pat)) {
+                const bits = manDecode(ch, idx + 16, 72, inv);
+                const n = bits.length;
+                /* A Ford frame is 64 bits: leave it to the Ford decoder. */
+                if (n < 72) {
+                    if (n > 64) out.push([idx, n, `${n}/72 bits (${pol})`]);
+                    continue;
+                }
+                const b = pack(bits);
+                if (crc8(b.subarray(0, 8), 0x07, 0x00) !== b[8]) {
+                    if (!junk(b)) out.push([idx, 72, `72/72 bits, CRC FAIL  ${hex(b)} (${pol})`]);
+                    continue;
+                }
+                const kpa = (((b[0] & 3) << 8) | b[1]) * 0.75;
+                const id = hex(new Uint8Array([b[5], b[4], b[3]]));
+                out.push([idx, 1000, `OK  id ${id}  ${(kpa / 6.895).toFixed(1)} PSI  ` +
+                                     `${b[2] - 30} C (${pol})`]);
+            }
+        }
+        return out;
+    }
+
     const PROTOCOLS = [['TOYOTA', SPC_52, toyota], ['FORD', SPC_52, ford],
-                       ['PMV-107J', SPC_100, pmv107j]];
+                       ['RENAULT', SPC_52, renault], ['PMV-107J', SPC_100, pmv107j]];
 
 
     /* ---- OOK: TPMS CAP on AM audio (key 4). Ported from dectpms.c. ---- */
@@ -891,7 +920,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     /* Stream time with nothing above noise before the quiet hint. */
     const QUIET = 30 * FS;
     /* Hints given once per session; the rest are given again after a retune. */
-    const SESSION_HINTS = ['pmv', 'missed'];
+    const SESSION_HINTS = ['pmv', 'renault', 'missed'];
 
     const SENS_NAMES = ['LOW', 'MID', 'HIGH'];
 
@@ -1128,6 +1157,9 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             if (ok && b.model === 'PMV-107J') {
                 this.hint('pmv', b.at, 'This sensor is a Pacific PMV-107J. TPMS EU / NA cannot ' +
                           'decode it yet: save the capture and send it.');
+            } else if (ok && b.model === 'RENAULT') {
+                this.hint('renault', b.at, 'This sensor is a Renault. TPMS CAP does not decode it ' +
+                          'on the radio, but TPMS EU3 does.');
             } else if (ok && (b.model === 'TOYOTA' || b.model === 'FORD')) {
                 /* The radio decodes only these two; in OOK it decodes nothing. */
                 this.pendingOk.push({ at: b.at, model: b.model });
@@ -1192,7 +1224,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
                 this.hint('quiet', this.done, 'Nothing above noise for 30 s. Wake the sensor next ' +
                           'to the radio, check the band with 2 (433.92 in Europe, 315.00 in ' +
                           'North America), try SENS HIGH with 3, and the other demod with 4 ' +
-                          '(FSK for Ford / Toyota, OOK for Schrader / GM / BMW / Nissan).');
+                          '(FSK for Ford / Toyota / Renault, OOK for Schrader / GM / BMW / Nissan).');
             }
             const drop = Math.max(0, limit - LEAD);
             this.buf.splice(0, drop);
@@ -1280,6 +1312,15 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
         return chips;
     }
 
+    /** Renault chips: id 6FB001, 25.2 PSI (174 kPa), 1 C, as a real sensor sent. */
+    function renaultChips() {
+        const r = new Uint8Array([0xC4, 0xE8, 31, 0x01, 0xB0, 0x6F, 0xFF, 0xFF, 0]);
+        r[8] = crc8(r.subarray(0, 8), 0x07, 0x00);
+        const chips = unpack([0x55, 0x55, 0x55, 0x56], 32);
+        for (const b of unpack(r, 72)) chips.push(b, 1 - b);
+        return chips;
+    }
+
     /** OOK chips as the sensors send them: carrier on, then an on/off pair per bit. */
     function ookEncode(bits) {
         const chips = [1];
@@ -1355,10 +1396,12 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             samples = samples.concat(chipsToSamples(toyotaChips(false), SPC_52, invert), noise(2000));
             samples = samples.concat(chipsToSamples(pmvChips(), SPC_100, invert), noise(2000));
             samples = samples.concat(chipsToSamples(fordChips(), SPC_52, invert), noise(3000));
+            samples = samples.concat(chipsToSamples(renaultChips(), SPC_52, invert), noise(3000));
             st.feed([MARK_SET, 0x01, 1].concat(toStream(samples), [MARK_GAP]));
             for (const [name, want] of [['TOYOTA', 'id 00F211A9  28.0 PSI  1 C'],
                                         ['PMV-107J', 'id 0ABCDEF5  32.0 PSI  25 C'],
-                                        ['FORD', 'id A1B2C3D4  36.0 PSI  18 C']]) {
+                                        ['FORD', 'id A1B2C3D4  36.0 PSI  18 C'],
+                                        ['RENAULT', 'id 6FB001  25.2 PSI  1 C']]) {
                 const ok = st.results.some((r) => r[1] === name && r[2] >= 1000 && r[3].includes(want));
                 lines.push(`${ok ? 'ok  ' : 'FAIL'}  ${name} ${invert ? 'inverted' : 'normal'}`);
                 if (!ok) fails++;
@@ -1381,7 +1424,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     const api = { FS, BAUD, MARK_GAP, MARK_SET, MARK_HIT, SPC_52, SPC_100, Stream, selftest,
                   command, CMD, IF_PRESETS, IF_NAMES,
                   decodeSamples, merge, crc8, dmanDecode, manDecode, toStream, chipsToSamples,
-                  toyotaChips, pmvChips, fordChips, noiseMaker, describeSettings,
+                  toyotaChips, pmvChips, fordChips, renaultChips, noiseMaker, describeSettings,
                   SPC_OOK, schraderChips, bmwChips, eg53Chips, nissanChips, ookToSamples };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.KPlug = api;
@@ -1391,7 +1434,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
-const MODELS = ['TOYOTA', 'PMV-107J', 'FORD', 'SCHRADER', 'EG53', 'BMW', 'NISSAN', 'OOK'];
+const MODELS = ['TOYOTA', 'PMV-107J', 'FORD', 'RENAULT', 'SCHRADER', 'EG53', 'BMW', 'NISSAN', 'OOK'];
 const MAX_LINES = 5000;
 
 let port = null;

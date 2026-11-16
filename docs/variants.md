@@ -1,11 +1,11 @@
 # Variant screens
 
-The four list apps are built from the same `tpmsrx_app.c` with a flavour
+The five list apps are built from the same `tpmsrx_app.c` with a flavour
 flag. These LCD mocks show the waiting screen and the options menu for each
 one. The status line shows the active **band** and **demod** (FSK or OOK),
 and the car lines name the sensors that app decodes. `TPMS EU` and `TPMS NA`
-show `BAND` and `CLEAR` in the menu; `TPMS EU2` and `TPMS NA2` have a fixed
-band, so they show `CLEAR` only.
+show `BAND`, `SENS` and `CLEAR` in the menu; `TPMS EU2`, `TPMS NA2` and
+`TPMS EU3` have a fixed band, so they show `SENS` and `CLEAR` only.
 
 Regenerate with:
 
@@ -48,6 +48,16 @@ quarter high.
 
 ![NA2 options menu](variants/na2_menu.png)
 
+## TPMS EU3 — UK / Europe, 433.92 FSK (fixed)
+
+Renault (Clio, Captur, Zoe) and Ford. Band locked. The test line shows the
+tuning offset, IF preset and the most bits one `AA A9` sync decoded, as
+`RENA n/72`. Toyota stays in TPMS EU: both would not fit in one app.
+
+![EU3 waiting](variants/eu3_waiting.png)
+
+![EU3 options menu](variants/eu3_menu.png)
+
 ## UV Studio listing text
 
 Short descriptions for the [UV Studio Apps](https://armel.github.io/uvstudio/#apps)
@@ -60,6 +70,7 @@ when a sensor moves between apps.
 | `TPMS NA` | TPMS RX (FSK) for US & Canada, 315 MHz (can switch to 433.92). Decodes Ford and Toyota sensors. |
 | `TPMS EU2` | TPMS RX (OOK) for UK & Europe, 433.92 MHz only. Schrader MRXGG4, Vauxhall/Opel/Saab, older BMW/Mini. |
 | `TPMS NA2` | TPMS RX (OOK) for US & Canada, 315 MHz only. Schrader MRXGG4, Chevrolet/GM, Nissan/Infiniti, Subaru. |
+| `TPMS EU3` | TPMS RX (FSK) for UK & Europe, 433.92 MHz only. Decodes Renault and Ford sensors. |
 | `TPMS DBG` | TPMS signal debugger. Records raw FSK/OOK bursts to show why a TPMS app hears nothing. No decoding. |
 
 ## Shared gallery shots

@@ -30,7 +30,7 @@ def rows(*lines):
 
 UI = [
     ("T_TITLE", TITLE),
-    # One demod per app: EU / NA are FSK, EU2 / NA2 are OOK.
+    # One demod per app: EU / NA / EU3 are FSK, EU2 / NA2 are OOK.
     ("T_DEMOD", "OOK" if os.environ.get("FLAVOUR", "eu") in ("eu2", "na2") else "FSK"),
     ("T_WAIT", "LISTENING"),
     ("T_PSI", "psi"),
@@ -51,6 +51,14 @@ UI = [
             # The blank second car row holds the FSK test line (offset, IF
             # preset, Toyota decode progress). The menu still shows VER.
             ("T_IF", "K IF"), ("T_TY", " TOYT "), ("T_TYEND", "/72"),
+        ],
+        "eu3": [
+            ("T_FORD", "FORD"), ("T_RENA", "RENA"),
+            ("T_REGION", "UK/EU"),
+            ("T_CARS", rows("FSK: RENAULT|FORD", "")),
+            # As EU, but the counter is the most bits behind the Ford /
+            # Renault sync AA A9.
+            ("T_IF", "K IF"), ("T_TY", " RENA "), ("T_TYEND", "/72"),
         ],
         "eu2": [
             ("T_EG53", "EG53"), ("T_BMW", "BMW"), ("T_SCHR", "SCHR"),
@@ -80,6 +88,7 @@ UI = [
     *{
         "eu": [("T_HINT", "1 SPK 2 BAND * IF 0 LIGHT")],
         "na": [("T_HINT", "1 SPK 2 BAND * IF 0 LIGHT")],
+        "eu3": [("T_HINT", "1 SPK * IF 0 LIGHT")],
         "eu2": [("T_HINT", "1 SPK  0 LIGHT")],
         "na2": [("T_HINT", "1 SPK  0 LIGHT")],
     }[os.environ.get("FLAVOUR", "eu")],
@@ -95,7 +104,7 @@ a.const("UI_SIZE", ui_size)
 _hint = dict(UI)["T_HINT"]
 a.const("HINT_X", max(2, 126 - 4 * len(_hint)))
 a.const("T_TITLE_CHARS", len(TITLE))
-# EU2 / NA2: SENS + CLEAR (fixed band). EU / NA: BAND + SENS + CLEAR.
+# EU2 / NA2 / EU3: SENS + CLEAR (fixed band). EU / NA: BAND + SENS + CLEAR.
 _flavour = os.environ.get("FLAVOUR", "eu")
-a.const("MENU_ITEMS", {"eu2": 2, "na2": 2}.get(_flavour, 3))
+a.const("MENU_ITEMS", {"eu2": 2, "na2": 2, "eu3": 2}.get(_flavour, 3))
 a.main()

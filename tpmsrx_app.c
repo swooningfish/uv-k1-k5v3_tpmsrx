@@ -1,5 +1,5 @@
 /* Copyright 2026 — Apache-2.0
- * TPMS RX: Ford / Toyota FSK and Schrader OOK on PA4 at 38.4 kHz.
+ * TPMS RX: Ford / Toyota / Renault FSK and Schrader OOK on PA4 at 38.4 kHz.
  */
 #include <stdint.h>
 #include <stdbool.h>
@@ -69,15 +69,16 @@ void *memset(void *d, int c, size_t n)
 #define SENS_LEVELS    3u
 #define SENS_DEFAULT   1u
 #define ROWS           7u
-/* One demod per app: EU / NA are FSK (Ford, Toyota), EU2 / NA2 are OOK. */
+/* One demod per app: EU / NA (Ford, Toyota) and EU3 (Ford, Renault) are FSK,
+ * EU2 / NA2 are OOK. */
 #if TPMS_HAVE_FSK
 #define TPMS_PATH      TPMS_MODE_FSK
 #else
 #define TPMS_PATH      TPMS_MODE_OOK
 #endif
-/* EU2 is fixed at 433.92 and NA2 at 315.00, so neither shows BAND.
+/* EU2 and EU3 are fixed at 433.92 and NA2 at 315.00, so none shows BAND.
  * EU / NA can change band. */
-#if defined(TPMS_FLAVOUR_EU2)
+#if defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_EU3)
 #define TPMS_LOCK_BAND 1
 #define TPMS_BAND433   1u
 #define MENU_SENS      0u
@@ -403,7 +404,12 @@ static const char *modelName(uint8_t m, const char *ui)
 {
 #if TPMS_HAVE_FSK
     if (m == TPMS_FORD) return ui + T_FORD;
+#endif
+#if TPMS_HAVE_TOYT
     if (m == TPMS_TOYT) return ui + T_TOYT;
+#endif
+#if TPMS_HAVE_RENA
+    if (m == TPMS_RENA) return ui + T_RENA;
 #endif
 #if TPMS_HAVE_SCHR
     if (m == TPMS_SCHR) return ui + T_SCHR;
@@ -424,14 +430,17 @@ static const char *modelName(uint8_t m, const char *ui)
 /**
  * Hex digits a sensor model's id needs, as rtl_433 prints them.
  *
- * Ford and Toyota ids are 32 bits, Schrader MRXGG4 28, the rest 24.
+ * Ford and Toyota ids are 32 bits, Schrader MRXGG4 28, the rest (Renault
+ * among them) 24.
  *
  * @param m TPMS_FORD or one of the other model ids.
  * @return 8, 7, or 6.
  */
 static uint8_t idDigits(uint8_t m)
 {
-#if TPMS_HAVE_FSK
+#if TPMS_HAVE_RENA
+    return m == TPMS_RENA ? 6u : 8u;
+#elif TPMS_HAVE_FSK
     (void)m;
     return 8u;
 #else
@@ -636,8 +645,9 @@ static void draw(const char *ui, const dectpms_t *dec)
 #if TPMS_HAVE_FSK
         /* Test line on the blank second car row, e.g.
            "-5K IF7E2C TOYT 40/72": tuning offset, REG_43 preset, and the
-           most Toyota bits one sync decoded since the last retune or SENS
-           change (both reset the slicer). */
+           most Toyota bits (EU3: AA A9 bits, shown as RENA) one sync
+           decoded since the last retune or SENS change (both reset the
+           slicer). */
         o = puti(str, foffSteps() * 5);
         o = put(o, ui + T_IF);
         o = putHex(o, IF_PRESET[g.cfg.ifp], 4);

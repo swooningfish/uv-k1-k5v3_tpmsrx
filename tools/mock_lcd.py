@@ -110,6 +110,15 @@ VARIANTS = {
         "menu": [(">SENS MID", 100), (" CLEAR", 78)],
         "menu_status": "315.00 OOK",
     },
+    "eu3": {
+        "app": "TPMS EU3",
+        "status": "433.92 FSK",
+        "listen": "LISTENING 433.92 UK/EU",
+        "cars": ("FSK: RENAULT|FORD", "0K IF7E2C RENA 0/72"),
+        "hints": "1 SPK * IF 0 LIGHT",
+        "menu": [(">SENS MID", 100), (" CLEAR", 78)],
+        "menu_status": "433.92 FSK",
+    },
 }
 
 

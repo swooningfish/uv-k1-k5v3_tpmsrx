@@ -39,6 +39,7 @@ SETS=(
   "na|TPMS NA|TPMS_FLAVOUR_NA"
   "eu2|TPMS EU2|TPMS_FLAVOUR_EU2"
   "na2|TPMS NA2|TPMS_FLAVOUR_NA2"
+  "eu3|TPMS EU3|TPMS_FLAVOUR_EU3"
 )
 # dbg is the burst recorder, cap the K-plug capture app. A flavour name
 # builds that app only.
@@ -52,6 +53,7 @@ if [ "${1:-}" != "" ]; then
     na)  SETS=("na|TPMS NA|TPMS_FLAVOUR_NA") ;;
     eu2) SETS=("eu2|TPMS EU2|TPMS_FLAVOUR_EU2") ;;
     na2) SETS=("na2|TPMS NA2|TPMS_FLAVOUR_NA2") ;;
+    eu3) SETS=("eu3|TPMS EU3|TPMS_FLAVOUR_EU3") ;;
     dbg) WANT_DBG=1 ;;
     cap) WANT_CAP=1 ;;
     *) echo "unknown flavour: $want"; exit 1 ;;

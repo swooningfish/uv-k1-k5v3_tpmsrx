@@ -37,25 +37,27 @@ def read(path: str) -> str:
 def flavour_ui(flavour: str) -> dict[str, str]:
     """Mirror the gen_assets.py strings for one flavour.
 
-    @param flavour Flavour key: eu, na, eu2, or na2.
+    @param flavour Flavour key: eu, na, eu2, na2, or eu3.
     @return Region, car lines, hint, band, mode, and the listening line.
     """
     os.environ["FLAVOUR"] = flavour
     # Re-exec the same mapping without importing the SDK Assets class.
-    regions = {"eu": "UK/EU", "na": "US/CA", "eu2": "UK/EU", "na2": "US/CA"}
+    regions = {"eu": "UK/EU", "na": "US/CA", "eu2": "UK/EU", "na2": "US/CA", "eu3": "UK/EU"}
     cars = {
         "eu": ("FSK: FORD|TOYOTA", ""),
         "na": ("FSK: FORD|TOYOTA", ""),
         "eu2": ("OOK: VAUXHALL|OPEL|SAAB", "OOK: BMW|MINI|SCHRADER"),
         "na2": ("OOK: CHEVROLET|GM|SCHRADER", "OOK: SUBARU|NISSAN"),
+        "eu3": ("FSK: RENAULT|FORD", ""),
     }
     hints = {
         "eu": "1 SPK 2 BAND * IF 0 LIGHT",
         "na": "1 SPK 2 BAND * IF 0 LIGHT",
         "eu2": "1 SPK  0 LIGHT",
         "na2": "1 SPK  0 LIGHT",
+        "eu3": "1 SPK * IF 0 LIGHT",
     }
-    band = "433.92" if flavour in ("eu", "eu2") else "315.00"
+    band = "433.92" if flavour in ("eu", "eu2", "eu3") else "315.00"
     mode = "OOK" if flavour in ("eu2", "na2") else "FSK"
     return {
         "region": regions[flavour],
@@ -145,7 +147,7 @@ def test_assets_and_flavours() -> None:
     assets = read("gen_assets.py")
     check('"T_HINT"' in assets and "T_HINT1" not in assets and "T_HINT2" not in assets,
           "hint strings defined")
-    for fl in ("eu", "na", "eu2", "na2"):
+    for fl in ("eu", "na", "eu2", "na2", "eu3"):
         ui = flavour_ui(fl)
         check(ui["hint"] in assets, f"{fl} hint text in gen_assets")
         check(ui["region"] in assets, f"{fl} region in gen_assets")
@@ -166,13 +168,20 @@ def test_assets_and_flavours() -> None:
         # Headline length fits 128 px tiny font (4 px/glyph).
         check(len(ui["listen"]) * 4 <= 128, f"{fl} listening line fits width: {ui['listen']}")
         # Locked flavours must not advertise dead band/mode keys.
-        if fl in ("eu2", "na2"):
+        if fl in ("eu2", "na2", "eu3"):
             check("2 BAND" not in ui["hint"], f"{fl} hints omit band")
     check("T_AUTO" not in assets and "T_MODE" not in assets, "no AUTO or MODE strings")
     hdr = read("dectpms.h")
     m = re.search(r"TPMS_FLAVOUR_EU2\) \|\| defined\(TPMS_FLAVOUR_NA2\)\n"
                   r"#define TPMS_HAVE_OOK 1\n#define TPMS_HAVE_SCHR 1", hdr)
     check(m is not None, "Schrader decodes in the OOK apps (EU2 / NA2)")
+    check(re.search(r"defined\(TPMS_HOST_ALL\) \|\| defined\(TPMS_FLAVOUR_EU3\)\n"
+                    r"#define TPMS_HAVE_RENA 1", hdr) is not None,
+          "Renault decodes in TPMS EU3 only")
+    check(re.search(r"TPMS_FLAVOUR_EU\) \|\| defined\(TPMS_FLAVOUR_NA\)\n"
+                    r"#define TPMS_HAVE_TOYT 1", hdr) is not None,
+          "Toyota decodes in TPMS EU / NA")
+    check('"eu3": 2' in assets, "EU3 menu has no BAND item")
 
 
 def test_dbg_app() -> None:
@@ -247,7 +256,8 @@ def test_build_flavours() -> None:
     """Check that build.sh builds every flavour from one source."""
     print("Build flavours (build.sh)")
     sh = read("build.sh")
-    for name in ("TPMS_FLAVOUR_EU", "TPMS_FLAVOUR_NA", "TPMS_FLAVOUR_EU2", "TPMS_FLAVOUR_NA2"):
+    for name in ("TPMS_FLAVOUR_EU", "TPMS_FLAVOUR_NA", "TPMS_FLAVOUR_EU2", "TPMS_FLAVOUR_NA2",
+                 "TPMS_FLAVOUR_EU3"):
         check(name in sh, f"builds {name}")
     check('"${APP}_app.c"' in sh or "${APP}_app.c" in sh, "single tpmsrx_app.c for all apps")
 

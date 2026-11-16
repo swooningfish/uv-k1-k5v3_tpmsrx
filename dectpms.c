@@ -1,5 +1,6 @@
-/* Ford / Toyota FSK and Schrader MRXGG4 OOK parsers + 38.4 kHz AF slicer.
- * Field layouts match rtl_433 (tpms_ford, tpms_toyota, schraeder). */
+/* Ford / Toyota / Renault FSK and Schrader MRXGG4 OOK parsers + 38.4 kHz AF
+ * slicer. Field layouts match rtl_433 (tpms_ford, tpms_toyota, tpms_renault,
+ * schraeder). */
 #include "dectpms.h"
 
 #define BIAS     2048
@@ -9,6 +10,8 @@
 #define GAP_FSK  8u
 #define GAP_OOK  24u
 #define TOYT_BITS 148u
+#define FORD_CHIPS 128u   /* 64 Manchester bits after AA A9 */
+#define RENA_CHIPS 144u   /* 72 Manchester bits after AA A9 */
 
 enum { ST_HUNT = 0, ST_FORD = 1, ST_TOYT = 2, ST_DONE = 4 };
 
@@ -116,6 +119,7 @@ bool tpms_parse_ford(const uint8_t b[8], tpms_pkt_t *out)
     return true;
 }
 
+#if TPMS_HAVE_TOYT
 /**
  * Decode one Toyota frame after differential Manchester decoding.
  *
@@ -139,6 +143,32 @@ bool tpms_parse_toyota(const uint8_t b[9], tpms_pkt_t *out)
     out->temp_c = (int16_t)((int)temp - 40);
     return true;
 }
+#endif
+
+#if TPMS_HAVE_RENA
+/**
+ * Decode one Renault frame after Manchester decoding.
+ *
+ * CRC-8 covers the first eight bytes, poly 0x07 and init 0. Pressure is
+ * ten bits of 0.75 kPa, temperature byte 2 minus 30, and the id the
+ * little-endian bytes 3 to 5.
+ *
+ * @param b Nine payload bytes, CRC last.
+ * @param out Filled with id, PSI, Celsius, and TPMS_RENA.
+ * @return True when the CRC matches.
+ */
+bool tpms_parse_renault(const uint8_t b[9], tpms_pkt_t *out)
+{
+    if (crc8(b, 8, 0x07u, 0x00u) != b[8]) return false;
+    unsigned raw = ((unsigned)(b[0] & 3u) << 8) | b[1];
+    out->model = TPMS_RENA;
+    out->id = ((uint32_t)b[5] << 16) | ((uint32_t)b[4] << 8) | b[3];
+    /* 0.75 kPa is 0.10878 PSI; 445 / 4096 is 0.10864, rounded. */
+    out->psi = (int16_t)((raw * 445u + 2048u) >> 12);
+    out->temp_c = (int16_t)((int)b[2] - 30);
+    return true;
+}
+#endif
 #endif /* TPMS_HAVE_FSK */
 
 #if TPMS_HAVE_SCHR
@@ -284,7 +314,7 @@ static unsigned man_decode(const uint8_t *raw, unsigned start, unsigned nraw,
 }
 #endif
 
-#if TPMS_HAVE_FSK
+#if TPMS_HAVE_TOYT
 /**
  * Differential-Manchester decode a row that already passed its sync.
  *
@@ -414,6 +444,35 @@ static void pack_bits(const uint8_t *raw, unsigned nraw, unsigned base,
 #endif
 
 #if TPMS_HAVE_FSK
+#if TPMS_HAVE_RENA
+/**
+ * Manchester-decode the bits after AA A9 and parse Ford or Renault.
+ *
+ * Both share the sync. At FORD_CHIPS the first eight bytes are tried as
+ * Ford; at RENA_CHIPS all nine as Renault. Without Toyota (TPMS EU3) the
+ * test counters track the most bits one AA A9 sync decoded.
+ *
+ * @param d Slicer holding the raw bits.
+ * @param out Filled on success.
+ * @return True when a full frame decodes and checks out.
+ */
+static bool finish_ford(dectpms_t *d, tpms_pkt_t *out)
+{
+    uint8_t pkt[9];
+    for (unsigned i = 0; i < 9u; i++) pkt[i] = 0;
+    unsigned want = d->bitn >> 1;
+    unsigned n = man_decode(d->raw, 0, d->bitn, pkt, want);
+#if !TPMS_HAVE_TOYT
+    if (n > d->ty_best) {
+        d->ty_best = (uint8_t)n;
+        d->note = 1u;
+    }
+#endif
+    if (n < want) return false;
+    if (want == FORD_CHIPS / 2u) return tpms_parse_ford(pkt, out);
+    return tpms_parse_renault(pkt, out);
+}
+#else
 /**
  * Manchester-decode the Ford bit buffer and parse the 8-byte frame.
  *
@@ -428,6 +487,9 @@ static bool finish_ford(dectpms_t *d, tpms_pkt_t *out)
     if (man_decode(d->raw, 0, d->bitn, pkt, 64) < 64u) return false;
     return tpms_parse_ford(pkt, out);
 }
+#endif
+
+#if TPMS_HAVE_TOYT
 
 /**
  * Differential-Manchester decode the Toyota buffer and parse it.
@@ -453,6 +515,7 @@ static bool finish_toyota(dectpms_t *d, tpms_pkt_t *out)
     return tpms_parse_toyota(pkt, out);
 }
 #endif
+#endif /* TPMS_HAVE_FSK */
 
 #if TPMS_HAVE_OOK
 /**
@@ -634,7 +697,9 @@ static void hunt_again(dectpms_t *d)
     d->win = 0;
     raw_clear(d);
 }
+#endif
 
+#if TPMS_HAVE_TOYT
 /**
  * Start a Toyota payload when the window ends on its 12-bit sync.
  *
@@ -684,7 +749,9 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
                 raw_clear(d);
                 return;
             }
+#if TPMS_HAVE_TOYT
             if (toyota_sync(d, w16)) return;
+#endif
         } else
 #endif
             put_bit(d, bit);
@@ -693,15 +760,27 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
 
 #if TPMS_HAVE_FSK
     if (d->state == ST_FORD) {
+#if TPMS_HAVE_TOYT
         if (toyota_sync(d, (uint16_t)(d->win & 0xffffu))) return;
+#endif
         put_bit(d, (uint8_t)(bit ^ d->inv));
-        if (d->bitn >= 128u) {
+#if TPMS_HAVE_RENA
+        /* Ford ends at 128 chips. When it fails, keep going: a Renault
+           frame is 16 chips longer behind the same sync. */
+        if (d->bitn == FORD_CHIPS || d->bitn == RENA_CHIPS) {
+            if (finish_ford(d, out)) *hit = true;
+            else if (d->bitn == RENA_CHIPS) hunt_again(d);
+        }
+#else
+        if (d->bitn >= FORD_CHIPS) {
             if (finish_ford(d, out)) *hit = true;
             else hunt_again(d);
         }
+#endif
         return;
     }
 
+#if TPMS_HAVE_TOYT
     if (d->state == ST_TOYT) {
         put_bit(d, bit);
         /* 1 sync bit + 72 bits of 2 chips, plus a little slack. */
@@ -710,6 +789,7 @@ static void on_bit(dectpms_t *d, uint8_t bit, tpms_pkt_t *out, bool *hit)
             else hunt_again(d);
         }
     }
+#endif
 #else
     (void)out;
     (void)hit;

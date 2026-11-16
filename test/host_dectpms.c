@@ -1,4 +1,4 @@
-/* Host checks for Ford / Toyota / Schrader TPMS field parsers. */
+/* Host checks for Ford / Toyota / Renault / Schrader TPMS field parsers. */
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
@@ -603,6 +603,70 @@ static void test_conversions(void)
 }
 
 /**
+ * Build the Renault frame that rtl_433 printed for a real sensor.
+ *
+ * id 6fb001, flags 31, 174 kPa (raw 232), 1 C.
+ *
+ * @param b Filled with nine bytes, CRC last.
+ */
+static void renault_frame(uint8_t b[9])
+{
+    static const uint8_t body[8] = {0xC4, 0xE8, 31, 0x01, 0xB0, 0x6F, 0xFF, 0xFF};
+    memcpy(b, body, 8);
+    b[8] = crc8_ref(b, 8, 0x07u, 0x00u);
+}
+
+/**
+ * Check a valid Renault frame, a broken CRC, and the pressure scale.
+ */
+static void test_renault(void)
+{
+    uint8_t b[9];
+    tpms_pkt_t o;
+    renault_frame(b);
+    memset(&o, 0, sizeof o);
+    expect(tpms_parse_renault(b, &o), "renault valid");
+    expect(o.model == TPMS_RENA, "renault model");
+    expect(o.id == 0x6FB001u, "renault id (little-endian)");
+    expect(o.psi == 25, "renault 174 kPa is 25 psi");
+    expect(o.temp_c == 1, "renault temp");
+    b[8] ^= 1u;
+    expect(!tpms_parse_renault(b, &o), "renault bad crc");
+    /* 1023 raw is 767.25 kPa, 111.3 PSI. */
+    b[0] = 0x03u;
+    b[1] = 0xFFu;
+    b[8] = crc8_ref(b, 8, 0x07u, 0x00u);
+    expect(tpms_parse_renault(b, &o) && o.psi == 111, "renault full-scale psi");
+}
+
+/**
+ * Feed a Renault FSK burst as samples, in both polarities.
+ *
+ * Renault has the Ford sync (55 55 55 56 on air) and nine Manchester bytes,
+ * so the slicer must not give up when the first eight fail the Ford check.
+ */
+static void test_renault_samples(void)
+{
+    static const uint8_t pre[4] = {0x55, 0x55, 0x55, 0x56};
+    uint8_t b[9], c[200];
+    unsigned n;
+    char msg[64];
+
+    renault_frame(b);
+    n = unpack(c, 0, pre, 32);
+    for (unsigned i = 0; i < 72u; i++) {
+        uint8_t bit = (uint8_t)((b[i >> 3] >> (7u - (i & 7u))) & 1u);
+        c[n++] = bit;
+        c[n++] = (uint8_t)!bit;
+    }
+    for (int inv = 0; inv < 2; inv++) {
+        int ok = phases_ok(TPMS_MODE_FSK, c, n, 52, inv, TPMS_RENA, 0x6FB001u);
+        snprintf(msg, sizeof msg, "renault samples, polarity %d: %d/5", inv, ok);
+        expect(ok >= 4, msg);
+    }
+}
+
+/**
  * Run every parser check.
  *
  * @return Zero when every check passed.
@@ -616,6 +680,8 @@ int main(void)
     test_ook_samples();
     test_ford();
     test_toyota();
+    test_renault();
+    test_renault_samples();
     test_schrader();
     test_eg53();
     test_bmw();

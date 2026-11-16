@@ -14,7 +14,7 @@ decoders:
 
 | Demod | Sensors |
 |---|---|
-| FSK | **Toyota** (Pacific PMV-C210), as `TPMS EU` / `TPMS NA`; **PMV-107J** (Pacific, many US Toyotas at 315 MHz), which no radio app decodes; **Ford** |
+| FSK | **Toyota** (Pacific PMV-C210), as `TPMS EU` / `TPMS NA`; **PMV-107J** (Pacific, many US Toyotas at 315 MHz), which no radio app decodes; **Ford**; **Renault**, as `TPMS EU3` |
 | OOK | **Schrader MRXGG4**, **GM EG53**, **BMW / Mini** and **Nissan / Subaru**, as `TPMS EU2` / `TPMS NA2` |
 
 Only the FSK decoders fit on the radio, so in OOK the decoding is all on the

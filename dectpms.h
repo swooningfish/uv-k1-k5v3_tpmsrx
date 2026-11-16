@@ -1,4 +1,4 @@
-/* TPMS bit parsers and AF slicer (Ford / Toyota FSK, Schrader OOK). */
+/* TPMS bit parsers and AF slicer (Ford / Toyota / Renault FSK, Schrader OOK). */
 #ifndef DECTPMS_H
 #define DECTPMS_H
 #include <stdint.h>
@@ -6,19 +6,27 @@
 
 enum {
     TPMS_FORD = 0, TPMS_TOYT = 1, TPMS_SCHR = 2,
-    TPMS_EG53 = 3, TPMS_BMW = 4, TPMS_NISS = 5
+    TPMS_EG53 = 3, TPMS_BMW = 4, TPMS_NISS = 5, TPMS_RENA = 6
 };
 enum { TPMS_MODE_FSK = 0, TPMS_MODE_OOK = 1 };
 
 /* One firmware image is one flavour. The host test builds every parser. */
 #if !defined(TPMS_FLAVOUR_EU) && !defined(TPMS_FLAVOUR_NA) && \
-    !defined(TPMS_FLAVOUR_EU2) && !defined(TPMS_FLAVOUR_NA2)
+    !defined(TPMS_FLAVOUR_EU2) && !defined(TPMS_FLAVOUR_NA2) && \
+    !defined(TPMS_FLAVOUR_EU3)
 #define TPMS_HOST_ALL 1
 #endif
-/* EU / NA are the FSK apps (Ford, Toyota). EU2 / NA2 are the OOK apps
- * (Schrader, EG53, and BMW or Nissan). */
-#if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU) || defined(TPMS_FLAVOUR_NA)
+/* EU / NA are the FSK apps (Ford, Toyota), EU3 the FSK app for Ford and
+ * Renault. EU2 / NA2 are the OOK apps (Schrader, EG53, and BMW or Nissan). */
+#if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU) || \
+    defined(TPMS_FLAVOUR_NA) || defined(TPMS_FLAVOUR_EU3)
 #define TPMS_HAVE_FSK 1
+#endif
+#if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU) || defined(TPMS_FLAVOUR_NA)
+#define TPMS_HAVE_TOYT 1
+#endif
+#if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU3)
+#define TPMS_HAVE_RENA 1
 #endif
 #if defined(TPMS_HOST_ALL) || defined(TPMS_FLAVOUR_EU2) || defined(TPMS_FLAVOUR_NA2)
 #define TPMS_HAVE_OOK 1
@@ -64,6 +72,18 @@ bool tpms_parse_ford(const uint8_t b[8], tpms_pkt_t *out);
  * @return True when the CRC and the pressure check match.
  */
 bool tpms_parse_toyota(const uint8_t b[9], tpms_pkt_t *out);
+/**
+ * Decode one Renault frame after Manchester decoding.
+ *
+ * CRC-8 covers the first eight bytes, poly 0x07 and init 0. Pressure is
+ * ten bits of 0.75 kPa, temperature byte 2 minus 30, and the id the
+ * little-endian bytes 3 to 5.
+ *
+ * @param b Nine payload bytes, CRC last.
+ * @param out Filled with id, PSI, Celsius, and TPMS_RENA.
+ * @return True when the CRC matches.
+ */
+bool tpms_parse_renault(const uint8_t b[9], tpms_pkt_t *out);
 /**
  * Decode one Schrader MRXGG4 frame after the sync nibble is removed.
  *
@@ -116,8 +136,9 @@ typedef struct {
     uint8_t  mode, state, inv, level, half;
     uint8_t  gate;         /* signal gate (HYST): lower hears weaker bursts */
     uint8_t  raw[40];      /* collected payload bits, MSB first packing */
-    /* Toyota test counter, cleared by dectpms_init: the most bits (of 72)
-     * one sync decoded. note is set when it rises; the app clears it. */
+    /* Test counter, cleared by dectpms_init: the most bits (of 72) one
+     * Toyota sync decoded, or one AA A9 sync in TPMS EU3 (Ford, Renault).
+     * note is set when it rises; the app clears it. */
     uint8_t  ty_best, note;
 } dectpms_t;
 

@@ -73,7 +73,7 @@ Wake a sensor with a TPMS tool, by letting a little air out, or by driving a
 short distance, then:
 
 1. Check the status line: `.92` or `.00`, and `F` or `O`.
-2. Match the sensor. Ford and Toyota send FSK. Schrader and most GM, Subaru and
+2. Match the sensor. Ford, Toyota and Renault send FSK. Schrader and most GM, Subaru and
    Nissan sensors send OOK. Europe is 433.92, North America is 315.00.
 3. Watch row 1 and row 4. `R` should jump, and `W` should go up.
 4. Watch `N` and `B`. A TPMS burst is usually 60 to 96 bits or more.
@@ -82,7 +82,7 @@ short distance, then:
 
 | You see | Next step |
 |---|---|
-| `N` goes up, list app stays empty | Use the list app for that demod (FSK: `TPMS EU` / `TPMS NA`, OOK: `TPMS EU2` / `TPMS NA2`) on the same band. If it is still empty, that sensor model is not supported |
+| `N` goes up, list app stays empty | Use the list app for that demod (FSK: `TPMS EU` / `TPMS NA`, or `TPMS EU3` for Renault; OOK: `TPMS EU2` / `TPMS NA2`) on the same band. If it is still empty, that sensor model is not supported |
 | `W` goes up, `N` stays at 0 | Wrong demod or band, or the signal is too weak. Try `*` and `2`, and move closer |
 | `R` and `W` do not move | No signal at the radio. Move closer, check the band and the antenna |
 | `F0` | Audio muted. Quit and relaunch |

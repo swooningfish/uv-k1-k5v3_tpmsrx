@@ -232,7 +232,7 @@ def main() -> int:
         print("FAIL  node exited " + str(res.returncode) + "\n" + res.stderr)
         return 1
     selfs = [ln for ln in lines if ln.startswith("SELF ")]
-    ok = len(selfs) == 6 and all(ln.startswith("SELF ok") for ln in selfs)
+    ok = len(selfs) == 8 and all(ln.startswith("SELF ok") for ln in selfs)
     print(f"  {'ok' if ok else 'FAIL'}  kplug.html self-test ({len(selfs)} checks)")
     fails += 0 if ok else 1
     events = [ln for ln in lines if not ln.startswith("SELF ")]

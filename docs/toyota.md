@@ -1,7 +1,8 @@
 # Toyota test settings
 
 `TPMS EU` and `TPMS NA` have two radio settings for testing Toyota (and Ford)
-reception. Both are saved on exit. Changing either one, or the band, retunes
+reception. `TPMS EU3` has the same two for Renault and Ford (see
+[TPMS EU3: the RENA count](#tpms-eu3-the-rena-count)). Both are saved on exit. Changing either one, or the band, retunes
 the radio and resets the test line.
 
 Before any sensor is listed, the line under the cars shows them:
@@ -67,3 +68,17 @@ Over USB the frames are short.
 
 - [README](../README.md): the list apps, keys and screen.
 - [How it works](how-it-works.md): the Toyota packet format and checks.
+
+## TPMS EU3: the RENA count
+
+`TPMS EU3` shows the same line with `RENA` in place of `TOYT`:
+
+```
+0K IF7E2C RENA 64/72
+```
+
+The count is the most bits one `AA A9` sync decoded. Renault and Ford share
+that sync, so both raise it: a Ford frame is 64 bits and a Renault frame 72.
+Read it with the table above, using `RENA` for `TOYT`, but `2` does nothing
+(the band is fixed at 433.92). A Renault frame that reaches 72 and still shows
+no row failed its CRC.

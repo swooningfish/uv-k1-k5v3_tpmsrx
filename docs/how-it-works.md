@@ -22,7 +22,7 @@ channel you were on.
 The field layouts follow [`rtl_433`](https://github.com/merbanan/rtl_433).
 Every packet must pass its checksum before it is shown.
 
-- **Ford** (`TPMS EU`, `TPMS NA`). FSK. Preamble `55 56`, or `AA A9` when the
+- **Ford** (`TPMS EU`, `TPMS NA`, `TPMS EU3`). FSK. Preamble `55 56`, or `AA A9` when the
   signal arrives inverted. Manchester decoding gives 8 bytes, and bytes 0 to 6
   must sum to byte 7. Pressure is a 9-bit value in quarter PSI (flag bit
   `0x20` is the ninth bit). Temperature is `(byte & 0x7f) − 56` °C, and is
@@ -32,6 +32,12 @@ Every packet must pass its checksum before it is shown.
   `0x07`, initial value `0x80`, and the pressure must match an inverted copy
   of itself. PSI is `raw ÷ 4 − 7`. Temperature is `raw − 40` °C. To tune for
   Toyota reception, see [Toyota test settings](toyota.md).
+- **Renault** (`TPMS EU3`). FSK, the same `55 56` / `AA A9` preamble as Ford,
+  then Manchester to 9 bytes. When the first 8 fail the Ford checksum, the
+  decoder reads 16 more chips and tries Renault. CRC-8, polynomial `0x07`,
+  initial value `0x00`. Pressure is a 10-bit value in 0.75 kPa steps, shown
+  as whole PSI. Temperature is `byte − 30` °C. The id is 24 bits, sent
+  little-endian.
 - **Schrader EG53MA4** (`TPMS EU2` for Vauxhall, Opel and Saab; `TPMS NA2` for
   Chevrolet and other GM). OOK Manchester, 120 bits; the first 40 are
   dropped. The next 9 bytes must sum to the checksum byte. Pressure is

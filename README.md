@@ -29,11 +29,15 @@ uses. If you are not sure, install both apps for your region.
 | `TPMS NA` | United States and Canada | 315 MHz (can switch to 433.92) | FSK | Ford, Toyota |
 | `TPMS EU2` | UK and Europe | 433.92 MHz, fixed | OOK | Schrader MRXGG4; Vauxhall, Opel, Saab; BMW and Mini (older Schrader sensor) |
 | `TPMS NA2` | United States and Canada | 315 MHz, fixed | OOK | Schrader MRXGG4; Chevrolet and other GM; Subaru; Nissan and Infiniti |
+| `TPMS EU3` | UK and Europe | 433.92 MHz, fixed | FSK | Renault (Clio, Captur, Zoe); Ford |
 | `TPMS DBG` | Either | 433.92 MHz (can switch) | FSK or OOK | No decoding: records raw bursts to find out why a list app hears nothing |
 | `TPMS CAP` | Either | 433.92 MHz (can switch) | FSK or OOK | Streams the sliced audio over the K-plug cable to a PC, where the browser page `tools/kplug.html` decodes every sensor above, plus the Pacific PMV-107J, bit by bit. See [docs/kplug.md](docs/kplug.md) |
 
 - `TPMS EU` and `TPMS NA` are the same app with a different starting band.
   A band you change is remembered.
+- `TPMS EU3` is for Renault. Each app has 4 KB of code space, and `TPMS EU`
+  had no room left beside Toyota, so Renault has its own app. It also
+  decodes Ford, which sends the same sync as Renault.
 - **Upgrading from before v1.3.0?** Schrader MRXGG4 moved from `TPMS EU` /
   `TPMS NA` to `TPMS EU2` / `TPMS NA2`, and the AUTO mode is gone. Each app
   now has one demod.
@@ -44,9 +48,9 @@ uses. If you are not sure, install both apps for your region.
   about a quarter higher than it really is**. Chevrolet and GM use a
   different sensor (`EG53`) and read correctly.
 
-All five apps build from the same sources (`tpmsrx_app.c`, `dectpms.c`, and
-`tpmsdbg_app.c` for `TPMS DBG`) with a flavour flag, so there are no separate
-regional code trees.
+All seven apps build from the same sources (`tpmsrx_app.c` and `dectpms.c`,
+plus `tpmsdbg_app.c` for `TPMS DBG` and `tpmscap_app.c` for `TPMS CAP`) with a
+flavour flag, so there are no separate regional code trees.
 
 ## Install
 
@@ -57,7 +61,7 @@ installed side by side, one per free slot.
 1. Download the zip for your app from the
    [Releases](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/releases)
    page (`TPMSEU.zip`, `TPMSNA.zip`, `TPMSEU2.zip`, `TPMSNA2.zip`,
-   `TPMSDBG.zip`) and unzip it to get the `.app` file. Releases are zipped
+   `TPMSEU3.zip`, `TPMSDBG.zip`, `TPMSCAP.zip`) and unzip it to get the `.app` file. Releases are zipped
    because GitHub rejects `.app` uploads. Each
    [build workflow run](https://github.com/swooningfish/uv-k1-k5v3_tpmsrx/actions)
    also has the raw `.app` files as artifacts.
@@ -76,9 +80,9 @@ installed side by side, one per free slot.
 | `MENU` | Open the options menu |
 | `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
 | `2` | Switch between 315.00 and 433.92 MHz (`TPMS EU` and `TPMS NA` only) |
-| `*` | Next IF / demod preset (`TPMS EU` and `TPMS NA` only). `F` then `*` goes back one. See [Toyota test settings](docs/toyota.md) |
+| `*` | Next IF / demod preset (FSK apps: `TPMS EU`, `TPMS NA` and `TPMS EU3`). `F` then `*` goes back one. See [Toyota test settings](docs/toyota.md) |
 | `F` | Step back: the next `SENS` change or `*` goes to the previous setting instead of the next. See [Stepping back with F](#stepping-back-with-f) |
-| `UP` / `DOWN` | Move the tuning 5 kHz up or down (`TPMS EU` and `TPMS NA` only; the navigation keys on the UV-K1). See [Toyota test settings](docs/toyota.md) |
+| `UP` / `DOWN` | Move the tuning 5 kHz up or down (FSK apps only; the navigation keys on the UV-K1). See [Toyota test settings](docs/toyota.md) |
 | `0` | Force backlight on or off. While forced, the screen stays lit and a light bulb shows on the status line. Off goes back to lighting the screen for 10 seconds after each key. Saved on exit |
 | `EXIT` | Quit, or close the menu. Once the screen has gone dark, the first press only lights it |
 
@@ -111,7 +115,7 @@ back instead:
 | Keys | Result |
 |---|---|
 | `F`, then `MENU` (or `2` / `5`) on `SENS` | `HIGH` → `MID` → `LOW` → `HIGH` |
-| `F`, then `*` | `7E08` → `7E0C` → `7E28` → `7E2C` → `7E08` (`TPMS EU` and `TPMS NA` only) |
+| `F`, then `*` | `7E08` → `7E0C` → `7E28` → `7E2C` → `7E08` (FSK apps only) |
 
 `F` works like the radio's own function key: it applies to the next key only.
 Press `F` again to cancel it. Any other key also cancels it, so `F`, `UP`,
@@ -136,7 +140,8 @@ The status line shows, from left to right:
 
 Before any sensor is heard, the screen shows `LISTENING <band> <region>` and
 the cars that app decodes. `TPMS EU` and `TPMS NA` add the Toyota test line
-under the cars (see [Toyota test settings](docs/toyota.md)). While
+under the cars, and `TPMS EU3` the same line with a `RENA` count (see
+[Toyota test settings](docs/toyota.md)). While
 there are three or fewer sensors, the free rows show key hints (`1 SPK`,
 `2 BAND`, `* IF`, `0 LIGHT`).
 
@@ -152,7 +157,7 @@ TOYT 00F211A9 28psi 1C -72 12s
 
 Each row is: model, id, pressure in whole PSI, temperature in whole °C,
 signal in dBm, and age (seconds, then minutes, then hours). Models are
-`FORD`, `TOYT`, `SCHR`, `EG53`, `BMW` and `NISS`. `NISS` has no temperature.
+`FORD`, `TOYT`, `RENA` (Renault), `SCHR`, `EG53`, `BMW` and `NISS`. `NISS` has no temperature.
 The id has as many hex digits as the sensor sends, as rtl_433 prints it: 8 for
 `FORD` and `TOYT`, 7 for `SCHR`, and 6 for the rest. A row that would be wider
 than the screen, such as `-12C -105 45s`, drops the space after the
@@ -164,7 +169,7 @@ while the sensor is still sending.
 Drawing the screen pauses decoding, so the list only redraws on a key press
 or 200 ms after a decode. Ages are as of the last redraw.
 
-The waiting and menu screens for all four list apps are in
+The waiting and menu screens for all five list apps are in
 [docs/variants.md](docs/variants.md).
 
 ### Troubleshooting
@@ -173,8 +178,8 @@ If the list stays on `LISTENING`:
 
 1. Wake the sensor: use a TPMS tool, let a little air out, or drive a short
    distance. Most sensors send rarely while parked.
-2. Try the other app for your region. `TPMS EU` / `TPMS NA` hear FSK sensors,
-   `TPMS EU2` / `TPMS NA2` hear OOK sensors.
+2. Try the other apps for your region. `TPMS EU` / `TPMS NA` hear FSK sensors,
+   `TPMS EU2` / `TPMS NA2` hear OOK sensors, and `TPMS EU3` hears Renault.
 3. Turn the speaker on (`1`) and listen for a rasp when the sensor sends.
 4. Run `TPMS DBG`. It does not decode, but it shows whether any signal reaches
    the radio and records each raw burst, and its `MENU` wizard suggests what
@@ -186,7 +191,8 @@ model is probably not supported.
 ## More docs
 
 - [Toyota test settings](docs/toyota.md): the tuning offset, IF presets and
-  `TOYT` count in `TPMS EU` / `TPMS NA`, and how to use them.
+  `TOYT` count in `TPMS EU` / `TPMS NA` (the `RENA` count in `TPMS EU3`), and
+  how to use them.
 - [How it works](docs/how-it-works.md): the signal path and how each sensor's
   reading is checked.
 - [Build](docs/build.md): building the apps and running the tests.

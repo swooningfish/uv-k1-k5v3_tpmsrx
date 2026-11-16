@@ -24,7 +24,8 @@ Before any sensor is listed, the line under the cars shows them:
   | `7E08` | 12.5 kHz mode, demod gain bit flipped |
 
 - `TOYT 40/72` is the most bits one Toyota sync has decoded, out of the 72 in a
-  frame, since the last retune. Noise alone seldom gets past about 12.
+  frame, since the last retune or SENS change. Noise alone seldom gets past
+  about 12.
 
 ## Reading the count
 

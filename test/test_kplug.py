@@ -93,6 +93,51 @@ const os = new K.Stream(24, (ev) => {
 os.feed(ob);
 os.flush();
 console.log('ostats ' + JSON.stringify(os.stats));
+
+/* A demod switch right after a burst: the burst was sliced as FSK, so it must
+   be decoded as FSK even though the OOK record arrives before the flush. */
+const db = [K.MARK_SET, 0x01, 1];
+const dpiece = (smp) => {
+    const pad = (7 - (smp.length % 7)) % 7;
+    for (const b of K.toStream(smp.concat(noise(pad)))) db.push(b);
+};
+dpiece(noise(4000));
+dpiece(K.chipsToSamples(good, K.SPC_52, false));
+dpiece(noise(2000));
+db.push(K.MARK_SET, 0x01, 1 | 8, K.MARK_GAP);
+const ds = new K.Stream(24, (ev) => {
+    if (ev.kind !== 'live') console.log('d' + ev.kind + ' ' + ev.text);
+});
+ds.feed(db);
+ds.flush();
+
+/* Records broken by lost bytes: a marker inside one, or a bad v byte. */
+let lives = 0;
+const fs = new K.Stream(24, (ev) => {
+    if (ev.kind !== 'live') return;
+    lives++;
+    console.log(`flive sens=${ev.radio.sensLevel} ook=${ev.radio.ook}`);
+});
+fs.feed([K.MARK_SET, 0x01, K.MARK_SET, 0x01, 2, K.MARK_SET, 0x01, 0x21, K.MARK_GAP]);
+console.log('flives ' + lives);
+
+/* An EG53 frame with a bad checksum fills all 120 bits but is not "full". */
+const eg = K.eg53Chips().slice();
+const k = 1 + 2 * 100;
+[eg[k], eg[k + 1]] = [eg[k + 1], eg[k]];
+const eb = [K.MARK_SET, 0x01, 1 | 8];
+const epiece = (smp) => {
+    const pad = (7 - (smp.length % 7)) % 7;
+    for (const b of K.toStream(smp.concat(new Array(pad).fill(smp[smp.length - 1])))) eb.push(b);
+};
+epiece(new Array(3000).fill(0));
+epiece(K.ookToSamples(eg, false));
+epiece(new Array(3000).fill(0));
+eb.push(K.MARK_GAP);
+const es = new K.Stream(24, (ev) => { if (ev.kind === 'fail') console.log('efail ' + ev.text); });
+es.feed(eb);
+es.flush();
+es.leaderboard(0).forEach((r) => console.log(`eboard best=${r.best} fail=${r.fail}`));
 """
 
 # (kind, text the line must contain), in order.
@@ -144,6 +189,14 @@ EXPECT = [
     ("ook", "✅ NISSAN   OK  id 123456  32.0 PSI (-)"),
     # No 'missed' hint in OOK (the radio cannot decode OOK), and chatter is no frame.
     ("ostats", 'ostats {"SCHRADER":[4,2,99],"BMW":[2,2,99],"EG53":[2,2,99],"NISSAN":[2,2,99]}'),
+    # Samples before an FSK-to-OOK switch are decoded as FSK.
+    ("dok", "✅ TOYOTA   OK  id 00F211A9"),
+    # Only the intact record is taken: SENS HIGH, FSK.
+    ("flive", "flive sens=2 ook=0"),
+    ("flives", "flives 1"),
+    # A failed EG53 check is not a full frame on the leaderboard.
+    ("efail", "❌ EG53     120/120 bits, CHECK FAIL"),
+    ("eboard", "eboard best=99 fail=1"),
 ]
 
 

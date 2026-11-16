@@ -488,7 +488,9 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 
     /** Chips from the radio's bit clock (dectpms_push). */
     function pllChips(s, spc) {
-        const step = Math.floor(65536 / spc);
+        /* dectpms.c's STEP_FSK for 52 us chips; PMV-107J (100 us), which the
+           radio does not decode, uses the nearest step. */
+        const step = spc === SPC_52 ? 32768 : Math.floor(65536 / spc);
         const want = 32768 + Math.floor(step / 2);
         let phase = 0;
         let half = 0;
@@ -498,7 +500,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             const level = s[i];
             if (level !== half) {
                 half = level;
-                phase += Math.floor((want - phase) / 2);
+                phase += Math.trunc((want - phase) / 2);   /* C division truncates */
             }
             phase += step;
             if (phase >= 65536) {
@@ -762,7 +764,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             const level = s[i];
             if (level !== half) {
                 half = level;
-                phase += Math.floor((want - phase) / 2);
+                phase += Math.trunc((want - phase) / 2);   /* C division truncates */
             }
             phase += step;
             if (phase >= 65536) {
@@ -862,12 +864,16 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
     function bestPerBurst(cands) {
         const order = {};
         PROTOCOLS.map(([name]) => name).concat(OOK_MODELS).forEach((name, i) => { order[name] = i; });
+        /* A reading of a known model (OK, failed check or partial) beats an
+           unknown-length OOK reading of the same burst, whatever its length. */
+        const known = (c) => (c[1] === 'OOK' ? 0 : 1);
         const out = [];
         let first = -BURST;
         for (const c of cands) {
             if (out.length && c[0] - first < BURST) {
                 const best = out[out.length - 1];
-                if (c[2] > best[2] || (c[2] === best[2] && order[c[1]] < order[best[1]])) {
+                if (known(c) > known(best) || (known(c) === known(best) &&
+                    (c[2] > best[2] || (c[2] === best[2] && order[c[1]] < order[best[1]])))) {
                     out[out.length - 1] = c;
                 }
                 continue;
@@ -941,14 +947,24 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 
         feed(data) {
             for (const byte of data) {
+                /* A marker byte inside a record means record bytes were lost
+                   (TPMS CAP drops bytes when its queue is full): drop it. */
+                if ((this.pendingSet || this.pendingHit) && byte >= 0x80) {
+                    this.pendingSet = 0;
+                    this.pendingHit = false;
+                }
                 if (this.pendingSet === 2) {
                     this.pendingSet = 1;
                     this.setByte = byte;
                 } else if (this.pendingSet === 1) {
                     this.pendingSet = 0;
+                    if (byte & 0xF0) continue;   /* v uses bits 3:0 only */
                     const ook = (byte >> 3) & 1;
                     const set = this.setByte | ((byte & 3) << 8) | (ook << 10);
                     const light = (byte >> 2) & 1;
+                    /* Samples before the switch were sliced with the old demod:
+                       decode them with it before the new one takes over. */
+                    if (!!ook !== this.ook) this.flush();
                     this.ook = !!ook;
                     /* Live copy for the settings dashboard, ahead of the decoding. */
                     this.radio = { ...describeSettings(set), s: set, light, raw: this.setByte,
@@ -1089,7 +1105,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
             const ok = b.score >= 1000;
             const st = this.stats[b.model] || (this.stats[b.model] = [0, 0, 0]);
             st[0]++;
-            st[2] = Math.max(st[2], Math.min(b.score, 99));
+            /* 99 reads "full frame"; an unknown OOK burst keeps its bit count. */
+            st[2] = Math.max(st[2], b.model === 'OOK' ? b.score : Math.min(b.score, 99));
             if (ok) st[1]++;
             this.results.push([b.at, b.model, b.score, b.desc]);
             this.out({ kind: ok ? 'ok' : (b.desc.includes('FAIL') ? 'fail' : 'partial'), at: b.at,
@@ -1102,8 +1119,9 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
                 if (ok) e.ok++;
                 else if (b.desc.includes('FAIL')) e.fail++;
                 else e.partial++;
-                /* Bits decoded; a checked frame counts as 100. */
-                e.best = Math.max(e.best, ok ? 100 : b.score);
+                /* Bits decoded; only a checked frame counts as 100 ("full"). An
+                   EG53 check failure (120) or a long unknown OOK burst does not. */
+                e.best = Math.max(e.best, ok ? 100 : Math.min(b.score, 99));
                 const prev = this.bestBySet.get(this.cur);
                 if (!prev || b.score > prev.score) this.bestBySet.set(this.cur, { score: b.score, model: b.model });
             }
@@ -1391,9 +1409,14 @@ let liveAt = 0;
 let waiting = null;     /* {field, value, at, el} until the radio confirms */
 let sendChain = Promise.resolve();
 let sliderDrag = false;
-let sweeping = false;
+let sweeping = false;   /* the running sweep's token, or false */
 /* TPMS CAP holds one command until its next key poll (every 40 ms), so space them out. */
 const CMD_GAP_MS = 150;
+/* TPMS CAP reads commands only between samples: one that lands while it
+   redraws or retunes is lost. Send a setting again until the radio's
+   settings record shows it, CMD_TRIES times CMD_CONFIRM_MS apart. */
+const CMD_TRIES = 3;
+const CMD_CONFIRM_MS = 800;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const kHz = (off) => `${off >= 0 ? '+' : ''}${off} kHz`;
 
@@ -1538,20 +1561,27 @@ function send(field, value, el) {
 }
 
 async function sendNow(field, value, el) {
-  if (!writer) return;
-  try {
-    await writer.write(KPlug.command(field, value));
-  } catch (e) {
-    info('⚠️ Send failed: ' + e.message, 'error');
-    return;
+  const once = field === 'clear' || field === 'report';
+  for (let n = 0; n < (once ? 1 : CMD_TRIES); n++) {
+    if (!writer) return;
+    try {
+      await writer.write(KPlug.command(field, value));
+    } catch (e) {
+      info('⚠️ Send failed: ' + e.message, 'error');
+      return;
+    }
+    if (once) {
+      info(field === 'clear' ? '🧹 Asked the radio to clear its counters.' : '🔄 Asked the radio ' +
+           'for its settings.');
+      return;
+    }
+    /* The 3 s "did not confirm" warning counts from the first try. */
+    if (!waiting || waiting.field !== field || waiting.value !== value || !n) {
+      waiting = { field, value, at: performance.now(), el };
+      renderDash();
+    }
+    if (await waitFor(() => liveValue(field) === value, CMD_CONFIRM_MS)) return;
   }
-  if (field === 'clear' || field === 'report') {
-    info(field === 'clear' ? '🧹 Asked the radio to clear its counters.' : '🔄 Asked the radio ' +
-         'for its settings.');
-    return;
-  }
-  waiting = { field, value, at: performance.now(), el };
-  renderDash();
 }
 
 /** True when the radio reports every field of a setting. */
@@ -1585,7 +1615,12 @@ function renderBoard() {
   if (!stream) return;
   const minSec = Math.max(1, parseInt($('minSec').value, 10) || 15);
   const rows = stream.leaderboard(minSec);
-  if (!rows.length) return;
+  if (!rows.length) {
+    /* A new connection or capture: drop the last session's rows. */
+    $('boardBody').innerHTML = '<tr><td colspan="8" class="hint">Settings appear here once the ' +
+      'radio reports them.</td></tr>';
+    return;
+  }
   let rank = 0;
   $('boardBody').innerHTML = rows.map((r) => {
     const per = (v) => (r.ranked ? v.toFixed(1) : '–');
@@ -1653,18 +1688,22 @@ async function runSweep() {
   if ((parseInt($('minSec').value, 10) || 15) > rankAfter) $('minSec').value = String(rankAfter);
   info(`🔁 Sweep: ${steps.length} settings, ${dwell} s each, about ${Math.ceil(total / 60)} min. ` +
        'Keep waking the sensor.');
-  sweeping = true;
+  /* A token, so a sweep left running by a disconnect stops at its next
+     check and never drives a later connection. */
+  const me = {};
+  sweeping = me;
   $('swStop').disabled = false;
   renderDash();
-  for (let k = 0; k < steps.length && sweeping; k++) {
+  for (let k = 0; k < steps.length && sweeping === me; k++) {
     const c = steps[k];
     await applyCombo(c);
+    if (sweeping !== me) break;
     if (!(await waitFor(() => matches(c), 4000))) {
-      info('⚠️ The radio did not take the sweep setting. Sweep stopped.', 'error');
+      if (sweeping === me) info('⚠️ The radio did not take the sweep setting. Sweep stopped.', 'error');
       break;
     }
     const t0 = performance.now();
-    while (sweeping && performance.now() - t0 < dwell * 1000) {
+    while (sweeping === me && performance.now() - t0 < dwell * 1000) {
       const left = Math.ceil(dwell - (performance.now() - t0) / 1000);
       $('swInfo').textContent = `${k + 1} / ${steps.length}: ${KPlug.describeSettings(
         c.band | (c.ifp << 1) | (c.offset << 3) | (c.sens << 8) | (c.demod << 10)).text}, ` +
@@ -1672,7 +1711,8 @@ async function runSweep() {
       await sleep(250);
     }
   }
-  const stopped = !sweeping;
+  const stopped = sweeping !== me;
+  if (sweeping && sweeping !== me) return;   /* a newer sweep owns the card now */
   sweeping = false;
   $('swStop').disabled = true;
   const top = stream.leaderboard(Math.max(1, dwell - 2)).find((r) => r.ranked && r.bursts);
@@ -1693,7 +1733,7 @@ function renderStats() {
   if (!stream) return;
   const rows = MODELS.map((m) => {
     const [seen, ok, best] = stream.stats[m] || [0, 0, 0];
-    const bestTxt = best >= 99 ? 'full frame' : String(best);
+    const bestTxt = best >= 99 && m !== 'OOK' ? 'full frame' : String(best);
     return `<tr><td>${m}</td><td class="num">${seen}</td><td class="num">${ok}</td>` +
            `<td class="num">${bestTxt}</td></tr>`;
   });
@@ -1790,6 +1830,9 @@ async function readLoop() {
       }
     } catch (e) {
       info('⚠️ Read error: ' + e.message, 'error');
+      /* Bytes were lost: mark a gap so samples either side are not joined.
+         It goes in the capture too, so a replay decodes the same way. */
+      if (stream) feedBytes(Uint8Array.of(KPlug.MARK_GAP));
     } finally {
       reader.releaseLock();
       reader = null;
@@ -1819,6 +1862,8 @@ async function disconnect() {
   setState('Not connected', 'off');
   hint('');
   waiting = null;
+  sweeping = false;   /* a running sweep stops at its next check */
+  $('swStop').disabled = true;
   renderDash();
   $('ctlNote').textContent = live ? 'Last settings the radio sent. Connect to change them.' :
     'Connect to the radio running TPMS CAP to see and change its settings.';
@@ -1923,6 +1968,14 @@ $('offZero').addEventListener('click', () => send('offset', 0, null));
 $('cClear').addEventListener('click', () => send('clear', 0));
 $('cReport').addEventListener('click', () => send('report', 0));
 $('offSlider').addEventListener('pointerdown', () => { sliderDrag = true; });
+/* change only fires when the value moved: a click that leaves it alone must
+   also hand the slider back to the radio's reports. */
+for (const ev of ['pointerup', 'pointercancel']) {
+  $('offSlider').addEventListener(ev, () => setTimeout(() => {
+    /* The slider is signed (-8..7); the radio reports the nibble. */
+    if ((Number($('offSlider').value) & 15) === liveValue('offset')) sliderDrag = false;
+  }, 0));
+}
 $('offSlider').addEventListener('input', () => {
   sliderDrag = true;
   $('offVal').textContent = kHz(Number($('offSlider').value) * 5);

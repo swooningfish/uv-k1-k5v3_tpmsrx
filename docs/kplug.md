@@ -31,7 +31,8 @@ settings, lets you change them from the PC, and gives hints on what to change.
 - The K-plug programming cable (USB to the radio's speaker / mic jack), the
   same one UV Studio uses over the K-plug.
 - `TPMS CAP` installed on the radio (`build/TPMSCAP.app`, installed with UV
-  Studio like the other apps).
+  Studio like the other apps). It needs firmware whose app interface has
+  `blit_page`; on an older one it returns straight to the Apps menu.
 - Chrome or Edge on a desktop. They have Web Serial, which UV Studio needs
   too.
 

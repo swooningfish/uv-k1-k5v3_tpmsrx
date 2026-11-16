@@ -740,6 +740,10 @@ void app_main(const app_api_t *api)
     uint8_t cfg[4] = {0};
     uint16_t r43, r2b, r73;
 
+    /* draw() needs blit_page (offset 380), past the end of an older level 3
+       table. blit_full would mix K5Viewer frames into the stream, so on such
+       firmware the app cannot work: return to the menu untouched. */
+    if (api->api_size < 384u) return;
     memset(&g, 0, sizeof g);
     g.A = api;
     g.prevKey = APP_KEY_INVALID;

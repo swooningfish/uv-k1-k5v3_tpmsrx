@@ -835,22 +835,16 @@ __attribute__((section(".text.entry"), used))
 void app_main(const app_api_t *api)
 {
     uint16_t r43, r2b, r73;
+    /* The overlay loader does not clear BSS (see TPMS EU), so a relaunch
+       would show the last run's peaks, stalls and burst. */
+    memset(&g, 0, sizeof g);
     g.A = api;
     g.prevKey = APP_KEY_INVALID;
-    g.spk = 0;
     g.fsk = 1u;
     g.band433 = 1u;
     g.rssi = -130;
     g.rssiPk = -200;
-    g.bursts = 0;
-    g.wiz = WZ_OFF;
-    g.wakes = 0;
-    g.matched = 0;
-    g.spiking = 0;
-    g.rbOk = 0;
-    g.lcd = false;
     g.t0 = api->ticks_ms();
-    memset(g.show, 0, sizeof g.show);
     api->led(false);
     api->backlight_on();
     api->af_capture_open();

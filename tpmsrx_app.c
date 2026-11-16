@@ -636,7 +636,8 @@ static void draw(const char *ui, const dectpms_t *dec)
 #if TPMS_HAVE_FSK
         /* Test line on the blank second car row, e.g.
            "-5K IF7E2C TOYT 40/72": tuning offset, REG_43 preset, and the
-           most Toyota bits one sync decoded since the last retune. */
+           most Toyota bits one sync decoded since the last retune or SENS
+           change (both reset the slicer). */
         o = puti(str, foffSteps() * 5);
         o = put(o, ui + T_IF);
         o = putHex(o, IF_PRESET[g.cfg.ifp], 4);
@@ -885,6 +886,8 @@ static void listen(const char *ui)
         if (dec.note) {
             dec.note = 0;
             g.drawDue = 1u;
+            /* Hold the redraw until the burst train is over, as for a decode. */
+            g.lastHit = g.A->ticks_ms();
         }
 #endif
 
@@ -961,7 +964,7 @@ void app_main(const app_api_t *api)
     char ui[UI_SIZE] __attribute__((aligned(4)));
     uint16_t r43, r2b, r73;
 
-    memset(rows, 0, sizeof rows);
+    /* rows needs no clearing: only the first nRows are ever read. */
     /* The overlay loader does not clear BSS, so start every field at 0. */
     memset(&g, 0, sizeof g);
     g.A = api;

@@ -161,6 +161,7 @@ typedef struct {
 static struct {
     const app_api_t *A;
     uint8_t prevKey, led, nRows, drawDue, menu, menuSel, blOff, spk;
+    uint8_t fn;       /* 1 after F: the next SENS or IF change steps back */
     uint8_t blTime;   /* radio backlight time: 0 off, BL_ALWAYS on, else timed */
     uint16_t ledCnt, keyCnt;
     int16_t rssi;
@@ -546,7 +547,9 @@ static void drawMenu(const char *ui)
 #endif
     for (uint8_t i = 0; i < MENU_ITEMS; i++) {
         o = str;
-        *o++ = (i == g.menuSel) ? '>' : ' ';
+        /* The cursor turns round while F is armed: MENU will step back.
+           '<' is two below '>'. */
+        *o++ = (i == g.menuSel) ? (char)('>' - 2u * g.fn) : ' ';
         o = put(o, ui + labels[i]);
 #if !TPMS_LOCK_BAND
         if (i == MENU_BAND) {
@@ -700,7 +703,8 @@ static void menuChange(dectpms_t *dec)
             break;
 #endif
         case MENU_SENS:
-            if (++g.cfg.sens >= SENS_LEVELS) g.cfg.sens = 0;
+            /* Up one level, or down one (up two) after F. */
+            g.cfg.sens = (uint8_t)((g.cfg.sens + 1u + g.fn) % SENS_LEVELS);
             decInit(dec);
             break;
         case MENU_CLR:
@@ -717,11 +721,12 @@ static void menuChange(dectpms_t *dec)
  *
  * @param key Key code from the firmware.
  * @param dec Slicer, reset when the band or demod changes.
+ * @param now ticks_ms at this key poll.
  * @return True when the app should exit.
  */
-static bool handleKey(uint8_t key, dectpms_t *dec)
+static bool handleKey(uint8_t key, dectpms_t *dec, uint32_t now)
 {
-    g.lastKey = g.A->ticks_ms();
+    g.lastKey = now;
     if (g.blOff && !g.menu) {
         /* EXIT on a dark screen only wakes it, so a press to see the list
            does not quit. With the radio backlight always on the screen is
@@ -736,10 +741,9 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
     if (g.menu) {
         int8_t d = g.A->nav_dir(key);
         if (d) {
-            int8_t n = (int8_t)g.menuSel + d;
-            if (n < 0) n = (int8_t)(MENU_ITEMS - 1u);
-            if (n >= (int8_t)MENU_ITEMS) n = 0;
-            g.menuSel = (uint8_t)n;
+            /* d is -1 or +1, so adding MENU_ITEMS keeps the sum positive
+               and the remainder wraps either way. */
+            g.menuSel = (uint8_t)((g.menuSel + MENU_ITEMS + d) % MENU_ITEMS);
             return false;
         }
         if (key == APP_KEY_EXIT)
@@ -769,7 +773,8 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
 #endif
 #if TPMS_HAVE_FSK
         case APP_KEY_STAR:
-            g.cfg.ifp = (uint8_t)((g.cfg.ifp + 1u) & 3u);
+            /* Up one preset, or down one (up three) after F. */
+            g.cfg.ifp = (uint8_t)((g.cfg.ifp + 1u + 2u * g.fn) & 3u);
             goto retune;
 #endif
         case APP_KEY_0:
@@ -819,12 +824,13 @@ static bool backlightHeld(void)
 /**
  * Turn the backlight off after the idle timeout.
  *
+ * @param now ticks_ms at this key poll.
  * @return True when the lamp was just released.
  */
-static bool serviceDisp(void)
+static bool serviceDisp(uint32_t now)
 {
     if (g.cfg.disp != DISP_TMO || g.menu || g.blOff) return false;
-    if ((uint32_t)(g.A->ticks_ms() - g.lastKey) < DISP_IDLE_MS) return false;
+    if ((uint32_t)(now - g.lastKey) < DISP_IDLE_MS) return false;
     g.blOff = 1;
     return true;
 }
@@ -892,9 +898,11 @@ static void listen(const char *ui)
             if (++g.keyCnt < KEY_EVERY) continue;
         }
         g.keyCnt = 0;
-        if (serviceDisp()) wantUi = true;
+        /* One clock read serves the whole poll. */
+        uint32_t now = g.A->ticks_ms();
+        if (serviceDisp(now)) wantUi = true;
         /* Drawing blocks sampling, so wait out the rest of the burst train. */
-        if (g.drawDue && (uint32_t)(g.A->ticks_ms() - g.lastHit) >= DRAW_HOLD_MS) {
+        if (g.drawDue && (uint32_t)(now - g.lastHit) >= DRAW_HOLD_MS) {
             g.drawDue = 0;
             wantUi = true;
         }
@@ -903,7 +911,11 @@ static void listen(const char *ui)
         bool keyUi = key != g.prevKey && key != APP_KEY_INVALID;
         g.prevKey = key;
         if (keyUi) {
-            if (handleKey(key, &dec)) break;
+            if (handleKey(key, &dec, now)) break;
+            /* F is a one-shot shift, like the radio's own: the next SENS or
+               IF key steps back. A second F cancels it, any other key uses
+               it up. handleKey ignores F itself. */
+            g.fn = (uint8_t)((key == APP_KEY_F) & (g.fn ^ 1u));
             wantUi = true;
         }
 
@@ -917,8 +929,8 @@ static void listen(const char *ui)
            viewer a frame between redraws; it sends nothing with no viewer.
            viewer_update (offset 388) is past the end of an older level 3 table. */
         if (!wantUi && g.A->api_size >= 392u
-            && (uint32_t)(g.A->ticks_ms() - g.lastView) >= VIEW_EVERY_MS) {
-            g.lastView = g.A->ticks_ms();
+            && (uint32_t)(now - g.lastView) >= VIEW_EVERY_MS) {
+            g.lastView = now;
             g.A->viewer_update();
             next = clk() + CYC_PER_SAMPLE;
         }

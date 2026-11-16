@@ -191,8 +191,9 @@ So for testing:
 |---|---|
 | `2` | Switch between 315.00 and 433.92 MHz |
 | `4` | FSK (Ford, Toyota) or OOK (Schrader, GM, BMW / Mini, Nissan / Subaru). The status line shows `FSK` or `OOK` |
-| `*` | Next IF preset (`7E2C`, `7E28`, `7E0C`, `7E08`) |
-| `3` | Sensitivity `LOW` / `MID` / `HIGH` (default `MID`), the same levels as `SENS` in the `TPMS EU` menu. `HIGH` hears weaker, more distant sensors; `LOW` ignores more noise |
+| `*` | Next IF preset (`7E2C`, `7E28`, `7E0C`, `7E08`). `F` then `*` goes back one |
+| `3` | Sensitivity `LOW` / `MID` / `HIGH` (default `MID`), the same levels as `SENS` in the `TPMS EU` menu. `HIGH` hears weaker, more distant sensors; `LOW` ignores more noise. `F` then `3` goes back one |
+| `F` | Step back: the next `*` or `3` goes to the previous setting. It applies to the next key only; press `F` again to cancel. See [Stepping back with F](../README.md#stepping-back-with-f) |
 | `UP` / `DOWN` | Tuning offset 5 kHz up or down (`RIGHT` / `LEFT` on the UV-K1) |
 | `1` | Speaker on or off |
 | `0` | Force backlight on or off, as in `TPMS EU`. While forced, a light bulb shows on the status line. Otherwise the screen goes dark 10 s after the last key, and the first `EXIT` only lights it. Saved on exit |

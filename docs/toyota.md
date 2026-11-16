@@ -14,7 +14,7 @@ Before any sensor is listed, the line under the cars shows them:
   move it 5 kHz at a time, from −40 to +35 kHz. One more step wraps to the
   other end. The default is `0K`.
 - `IF7E2C` is the BK4819 IF / demod register (`REG_43`). `*` steps through
-  four presets:
+  four presets, and `F` then `*` steps back one:
 
   | Preset | Meaning |
   |---|---|

@@ -156,6 +156,7 @@ static struct {
     uint8_t prevKey, spk, band433, ifp, foff, led, uart, lost, drawDue;
     uint8_t acc, accN, head, tail;
     uint8_t light, blOff, blTime, sens, ook;  /* forced lamp, lamp released, radio BL time */
+    uint8_t fn;       /* 1 after F: the next * or 3 steps back */
     uint8_t rxState, rxCmd, cmd;  /* PC command parser; cmd waits for the next poll */
     uint16_t ledCnt, keyCnt, hits, gaps;
     uint32_t brr, cr3, sent, setCnt, lastNote, lastDraw, lastKey;
@@ -600,7 +601,8 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             g.band433 ^= 1u;
             break;
         case APP_KEY_STAR:
-            g.ifp = (uint8_t)((g.ifp + 1u) & 3u);
+            /* Up one preset, or down one (up three) after F. */
+            g.ifp = (uint8_t)((g.ifp + 1u + 2u * g.fn) & 3u);
             break;
         case APP_KEY_4:
             /* FSK (Ford, Toyota) or OOK (Schrader, GM, BMW, Nissan). */
@@ -608,7 +610,8 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
             break;
         case APP_KEY_3:
             /* SENS LOW / MID / HIGH, as in TPMS EU. No retune needed. */
-            if (++g.sens >= SENS_LEVELS) g.sens = 0;
+            /* Up one level, or down one (up two) after F. */
+            g.sens = (uint8_t)((g.sens + 1u + g.fn) % SENS_LEVELS);
             decInit(dec);
             markSettings();
             return false;
@@ -695,6 +698,10 @@ static void capture(void)
         g.prevKey = key;
         if (fresh) {
             if (handleKey(key, &dec)) break;
+            /* F is a one-shot shift, like the radio's own: the next * or 3
+               key steps back. A second F cancels it, any other key uses
+               it up. handleKey ignores F itself. */
+            g.fn = (uint8_t)((key == APP_KEY_F) & (g.fn ^ 1u));
             wantUi = true;
         }
         if (g.cmd) {

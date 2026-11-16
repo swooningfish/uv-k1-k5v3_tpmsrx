@@ -76,7 +76,8 @@ installed side by side, one per free slot.
 | `MENU` | Open the options menu |
 | `1` | Speaker on or off. A speaker icon shows on the status line while it is on |
 | `2` | Switch between 315.00 and 433.92 MHz (`TPMS EU` and `TPMS NA` only) |
-| `*` | Next IF / demod preset (`TPMS EU` and `TPMS NA` only). See [Toyota test settings](docs/toyota.md) |
+| `*` | Next IF / demod preset (`TPMS EU` and `TPMS NA` only). `F` then `*` goes back one. See [Toyota test settings](docs/toyota.md) |
+| `F` | Step back: the next `SENS` change or `*` goes to the previous setting instead of the next. See [Stepping back with F](#stepping-back-with-f) |
 | `UP` / `DOWN` | Move the tuning 5 kHz up or down (`TPMS EU` and `TPMS NA` only; the navigation keys on the UV-K1). See [Toyota test settings](docs/toyota.md) |
 | `0` | Force backlight on or off. While forced, the screen stays lit and a light bulb shows on the status line. Off goes back to lighting the screen for 10 seconds after each key. Saved on exit |
 | `EXIT` | Quit, or close the menu. Once the screen has gone dark, the first press only lights it |
@@ -100,6 +101,23 @@ A good decode blinks the green LED, even with the backlight off.
 `UP` / `DOWN` (the navigation keys on the UV-K1) select an item. `MENU`, `2`
 or `5` change it. `EXIT` closes the menu. The menu also shows the app version.
 Decoding pauses while the menu is open, so a sensor that sends then is missed.
+
+### Stepping back with F
+
+`SENS` and the IF preset change in one direction and wrap round, so going
+from `HIGH` back to `MID` used to take two presses. Press `F` first to step
+back instead:
+
+| Keys | Result |
+|---|---|
+| `F`, then `MENU` (or `2` / `5`) on `SENS` | `HIGH` → `MID` → `LOW` → `HIGH` |
+| `F`, then `*` | `7E08` → `7E0C` → `7E28` → `7E2C` → `7E08` (`TPMS EU` and `TPMS NA` only) |
+
+`F` works like the radio's own function key: it applies to the next key only.
+Press `F` again to cancel it. Any other key also cancels it, so `F`, `UP`,
+`MENU` moves the cursor and then steps forward as usual. In the menu, the
+cursor turns from `>` to `<` while `F` is waiting. `BAND` has only two values,
+so `F` makes no difference there.
 
 ### The screen
 

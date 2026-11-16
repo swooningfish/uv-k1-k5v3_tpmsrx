@@ -603,6 +603,40 @@ static void test_conversions(void)
 }
 
 /**
+ * Feed a real Ford burst as samples, in both polarities.
+ *
+ * rtl_433 printed id c4ff1d57, 37.5 PSI, 71 C. The status byte is 0x48,
+ * and the sensor sends a ninth byte, f0, that is also a valid Renault CRC
+ * of the first eight. It must decode as Ford, never as Renault.
+ */
+static void test_ford_capture(void)
+{
+    static const uint8_t pre[4] = {0x55, 0x55, 0x55, 0x56};
+    static const uint8_t f[9] = {0xC4, 0xFF, 0x1D, 0x57, 0x96, 0x7F, 0x48, 0x94, 0xF0};
+    uint8_t c[200];
+    unsigned n;
+    char msg[64];
+    tpms_pkt_t o;
+
+    memset(&o, 0, sizeof o);
+    expect(tpms_parse_ford(f, &o), "ford capture: status 0x48 accepted");
+    expect(o.id == 0xC4FF1D57u && o.psi == 38 && o.temp_c == 71, "ford capture: fields");
+    expect(crc8_ref(f, 8, 0x07u, 0x00u) == f[8], "ford capture: trailer is a Renault CRC");
+
+    n = unpack(c, 0, pre, 32);
+    for (unsigned i = 0; i < 72u; i++) {
+        uint8_t bit = (uint8_t)((f[i >> 3] >> (7u - (i & 7u))) & 1u);
+        c[n++] = bit;
+        c[n++] = (uint8_t)!bit;
+    }
+    for (int inv = 0; inv < 2; inv++) {
+        int ok = phases_ok(TPMS_MODE_FSK, c, n, 52, inv, TPMS_FORD, 0xC4FF1D57u);
+        snprintf(msg, sizeof msg, "ford capture samples, polarity %d: %d/5", inv, ok);
+        expect(ok >= 4, msg);
+    }
+}
+
+/**
  * Build the Renault frame that rtl_433 printed for a real sensor.
  *
  * id 6fb001, flags 31, 174 kPa (raw 232), 1 C.
@@ -679,6 +713,7 @@ int main(void)
     test_fsk_samples();
     test_ook_samples();
     test_ford();
+    test_ford_capture();
     test_toyota();
     test_renault();
     test_renault_samples();

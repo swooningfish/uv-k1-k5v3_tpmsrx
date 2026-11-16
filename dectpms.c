@@ -94,23 +94,19 @@ static int16_t psi_from_kpa10(unsigned kpa10)
  * Decode one Ford frame after Manchester decoding.
  *
  * Bytes 0..6 are summed and must equal byte 7. Pressure is whole PSI.
- * Temperature is omitted when its high bit is set.
+ * Temperature is omitted when its high bit is set. Like rtl_433, the
+ * status byte 6 is not checked: real sensors send values such as 0x48
+ * beside the at-rest, moving and learn codes.
  *
  * @param b Eight payload bytes, checksum last.
  * @param out Filled with id, PSI, Celsius, and TPMS_FORD.
- * @return True when the checksum and status flags are valid.
+ * @return True when the checksum is valid.
  */
 bool tpms_parse_ford(const uint8_t b[8], tpms_pkt_t *out)
 {
     uint8_t sum = (uint8_t)(b[0] + b[1] + b[2] + b[3] + b[4] + b[5] + b[6]);
     if (sum != b[7]) return false;
-    uint8_t f = b[6];
-    if ((f & 0x90u) != 0) return false;
-    switch (f & 0x4cu) {
-        case 0x08u: case 0x04u: case 0x44u: break;
-        default: return false;
-    }
-    int psibits = ((f & 0x20u) << 3) | b[4];
+    int psibits = ((b[6] & 0x20u) << 3) | b[4];
     out->model = TPMS_FORD;
     out->id = be32(b);
     out->psi = (int16_t)((psibits + 2) / 4);
@@ -470,6 +466,9 @@ static bool finish_ford(dectpms_t *d, tpms_pkt_t *out)
 #endif
     if (n < want) return false;
     if (want == FORD_CHIPS / 2u) return tpms_parse_ford(pkt, out);
+    /* Only frames that failed the Ford sum get here. That matters: Ford
+       sensors can send a ninth byte that is the Renault CRC of the first
+       eight, so a Ford frame would also pass as Renault. */
     return tpms_parse_renault(pkt, out);
 }
 #else

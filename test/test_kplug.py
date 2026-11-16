@@ -69,6 +69,24 @@ for (const min of [15, 1]) {
         `partial=${r.partial} best=${r.best} ranked=${r.ranked} sec=${Math.round(r.seconds)}`));
 }
 
+/* A real Ford sensor (rtl_433: id c4ff1d57, 37.5 PSI, 71 C): status byte
+   0x48, then a ninth byte f0 that is also a valid Renault CRC. It must decode
+   as Ford and never as Renault. */
+{
+    const f = [0xC4, 0xFF, 0x1D, 0x57, 0x96, 0x7F, 0x48, 0x94, 0xF0];
+    const ch = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1,
+                0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0];
+    for (const b of f) for (let i = 7; i >= 0; i--) ch.push((b >> i) & 1, 1 - ((b >> i) & 1));
+    for (const inv of [false, true]) {
+        const smp = noise(3000).concat(K.chipsToSamples(ch, K.SPC_52, inv), noise(3000));
+        const ok = K.decodeSamples(smp, false).filter((c) => c[2] >= 1000);
+        console.log(`fordcap ${inv ? 'inv' : 'norm'} ` +
+                    ok.map((c) => c[1]).filter((v, i, a) => a.indexOf(v) === i).join(',') +
+                    (ok.some((c) => c[1] === 'FORD' && c[3].includes('id C4FF1D57  37.5 PSI  71 C'))
+                        ? ' id-ok' : ''));
+    }
+}
+
 /* OOK: TPMS CAP on AM audio. Every OOK model in both AM polarities, a bad CRC,
    then slicer chatter that must not pass for a frame. */
 const ob = [K.MARK_SET, 0x01, 1 | 8];
@@ -174,6 +192,9 @@ EXPECT = [
     ("board15", "board15 2: 433.92 0 MID ok=2 fail=1 partial=2 best=100 ranked=false sec=3"),
     ("board1", "board1 1: 433.92 0 MID ok=2"),
     ("board1", "board1 2: 433.92 -5 HIGH ok=1"),
+    # A real Ford frame with status 0x48 and a Renault-valid trailer byte.
+    ("fordcap", "fordcap norm FORD id-ok"),
+    ("fordcap", "fordcap inv FORD id-ok"),
     # OOK, carrier on as 1 (+) then as 0 (-).
     ("olive", "olive demod=OOK ook=1"),
     ("osettings", "⚙️ radio: 433.92 MHz OOK, offset +0 kHz, IF 25 kHz (7E2C), SENS MID"),

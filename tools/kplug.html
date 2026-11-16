@@ -636,6 +636,11 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
                     continue;
                 }
                 const b = pack(bits);
+                /* Ford sensors can send a ninth byte that is this CRC of the
+                   first eight: a frame that passes the Ford sum is Ford's. */
+                let sum = 0;
+                for (let i = 0; i < 7; i++) sum += b[i];
+                if ((sum & 0xFF) === b[7]) continue;
                 if (crc8(b.subarray(0, 8), 0x07, 0x00) !== b[8]) {
                     if (!junk(b)) out.push([idx, 72, `72/72 bits, CRC FAIL  ${hex(b)} (${pol})`]);
                     continue;

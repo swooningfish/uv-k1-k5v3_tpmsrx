@@ -24,9 +24,11 @@ Every packet must pass its checksum before it is shown.
 
 - **Ford** (`TPMS EU`, `TPMS NA`, `TPMS EU3`). FSK. Preamble `55 56`, or `AA A9` when the
   signal arrives inverted. Manchester decoding gives 8 bytes, and bytes 0 to 6
-  must sum to byte 7. Pressure is a 9-bit value in quarter PSI (flag bit
-  `0x20` is the ninth bit). Temperature is `(byte & 0x7f) − 56` °C, and is
-  left out when bit `0x80` is set.
+  must sum to byte 7. As in `rtl_433`, the status byte (byte 6) is not
+  checked, since sensors send more codes than at rest, moving and learn.
+  Pressure is a 9-bit value in quarter PSI (flag bit `0x20` is the ninth
+  bit). Temperature is `(byte & 0x7f) − 56` °C, and is left out when bit
+  `0x80` is set.
 - **Toyota** (`TPMS EU`, `TPMS NA`). FSK. 12-bit preamble `A9E` (or `561`
   inverted), then differential Manchester to 9 bytes. CRC-8, polynomial
   `0x07`, initial value `0x80`, and the pressure must match an inverted copy
@@ -34,7 +36,9 @@ Every packet must pass its checksum before it is shown.
   Toyota reception, see [Toyota test settings](toyota.md).
 - **Renault** (`TPMS EU3`). FSK, the same `55 56` / `AA A9` preamble as Ford,
   then Manchester to 9 bytes. When the first 8 fail the Ford checksum, the
-  decoder reads 16 more chips and tries Renault. CRC-8, polynomial `0x07`,
+  decoder reads 16 more chips and tries Renault. A frame that passes the Ford
+  checksum is always shown as Ford, never Renault: some Ford sensors send a
+  ninth byte that happens to be this CRC. CRC-8, polynomial `0x07`,
   initial value `0x00`. Pressure is a 10-bit value in 0.75 kPa steps, shown
   as whole PSI. Temperature is `byte − 30` °C. The id is 24 bits, sent
   little-endian.

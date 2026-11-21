@@ -37,6 +37,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "app_api.h"
+#include "tpmscap_assets.h"
 /* Build the FSK parsers (Ford, Toyota) of dectpms, as in TPMS EU. */
 #define TPMS_FLAVOUR_EU 1
 #include "dectpms.c"
@@ -141,15 +142,12 @@ void *memset(void *d, int c, size_t n)
 /* Decoder signal gate per SENS level, as in TPMS EU: a lower gate lets
  * weaker bursts through, a higher one ignores more noise. */
 static const uint8_t SENS_GATE[SENS_LEVELS] = { 60u, 40u, 28u };
-static const char *const SENS_NAME[SENS_LEVELS] = { "LOW", "MID", "HIGH" };
 
 /* Same presets as TPMS EU / NA (STAR cycles them). */
 static const uint16_t IF_PRESET[4] = { 0x7E2Cu, 0x7E28u, 0x7E0Cu, 0x7E08u };
 
-/* F4HWN gFontLight, as in TPMS EU: 9 status columns, LSB is the top pixel. */
-static const uint8_t LIGHT_ICON[9] = {
-    0x0Cu, 0x12u, 0x21u, 0x6Du, 0x79u, 0x6Du, 0x21u, 0x12u, 0x0Cu
-};
+/* The screen texts, the SENS names and the LIGHT_ICON bulb are assets
+ * (gen_cap_assets.py), read by asset_read. */
 
 static struct {
     const app_api_t *A;
@@ -215,6 +213,21 @@ static char *put(char *o, const char *s)
         *o++ = *s++;
     }
     return o;
+}
+
+/**
+ * Append a text from the packed assets.
+ *
+ * @param o Cursor to write at.
+ * @param off Asset offset of the text, a T_ constant.
+ * @return Cursor after the copied text.
+ */
+__attribute__((noinline))
+static char *putT(char *o, uint16_t off)
+{
+    char t[TEXT_MAX];
+    g.A->asset_read(off, t, TEXT_MAX);
+    return put(o, t);
 }
 
 /**
@@ -464,39 +477,41 @@ static void draw(const dectpms_t *dec)
     g.A->display_clear();
     g.A->status_clear();
     g.A->draw_battery();
-    g.A->print_inverse("CAP", 2, 0, true, true, 14);
-    o = put(str, g.band433 ? "433.92 " : "315.00 ");
-    o = put(o, g.ook ? "OOK" : "FSK");
+    o = putT(str, T_CAP);
+    *o = '\0';
+    g.A->print_inverse(str, 2, 0, true, true, 14);
+    o = putT(str, (uint16_t)(T_BAND + g.band433 * T_BAND_STRIDE));
+    o = putT(o, (uint16_t)(T_DEMOD + g.ook * T_DEMOD_STRIDE));
     *o = '\0';
     g.A->print_tiny(str, BAND_X, 1, true, true);
     /* The bulb sits between the capsule and the band while the lamp is forced on. */
     if (g.light && g.A->status_line) {
-        memcpy(g.A->status_line + TITLE_END + 1u
-               + ((BAND_X - TITLE_END - 1u - sizeof LIGHT_ICON) >> 1),
-               LIGHT_ICON, sizeof LIGHT_ICON);
+        g.A->asset_read(LIGHT_ICON, g.A->status_line + TITLE_END + 1u
+                        + ((BAND_X - TITLE_END - 1u - LIGHT_ICON_LEN) >> 1),
+                        LIGHT_ICON_LEN);
     }
 
-    o = put(str, g.uart ? "K-PLUG 115200: KPLUG.HTML" : "NO K-PLUG UART");
+    o = putT(str, g.uart ? T_UART : T_NOUART);
     row(str, 8, o);
     o = puti(str, foffSteps() * 5);
-    o = put(o, "K IF");
+    o = putT(o, T_KIF);
     o = putHex(o, IF_PRESET[g.ifp], 4);
-    o = put(o, " SENS ");
-    o = put(o, SENS_NAME[g.sens]);
+    o = putT(o, T_SENS);
+    o = putT(o, (uint16_t)(T_SENSN + g.sens * T_SENSN_STRIDE));
     row(str, 16, o);
-    o = put(str, "TOYT ");
+    o = putT(str, T_TOYT);
     o = puti(o, dec->ty_best);
-    o = put(o, "/72 HITS ");
+    o = putT(o, T_HITS);
     o = puti(o, g.hits);
     row(str, 24, o);
-    o = put(str, "SENT ");
+    o = putT(str, T_SENT);
     o = puti(o, (int32_t)(g.sent >> 10));
-    o = put(o, "KB GAPS ");
+    o = putT(o, T_GAPS);
     o = puti(o, g.gaps);
     row(str, 32, o);
-    o = put(str, "2 BAND * IF 3 SENS 0 LIGHT");
+    o = putT(str, T_HELP1);
     row(str, 40, o);
-    o = put(str, "ARROWS OFS 4 DEMOD 1 SPK 5 CLR");
+    o = putT(str, T_HELP2);
     row(str, 49, o);
     g.A->blit_page(0);
     g.A->blit_page(8);

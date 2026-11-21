@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "app_api.h"
+#include "tpmsdbg_assets.h"
 
 /**
  * Copy bytes. The overlay is freestanding and has no libc.
@@ -84,18 +85,8 @@ void *memset(void *d, int c, size_t n)
 #define WAKE_MS        30000u
 
 enum { WZ_OFF = 0, WZ_HISS, WZ_WAKE, WZ_BURST, WZ_DONE };
+/* The order of the T_VERDICT rows in gen_dbg_assets.py, three per verdict. */
 enum { V_MUTE = 0, V_HISS, V_OK, V_NORF, V_NORSSI, V_SLICER, V_NOAF };
-
-/* Three body rows per verdict. */
-static const char *const VERDICT[] = {
-    "AF MUTED: F IS 0", "EXIT, RELAUNCH, CHECK F9 OR F7", "",
-    "NO HISS: TURN VOLUME UP", "EXIT, THEN MENU TO RETRY", "",
-    "RF AND SLICER OK", "USE LIST APP, SAME BAND/MODE", "LIST EMPTY? MODEL NOT IN APP",
-    "NO RF SEEN, NOTHING HEARD", "MOVE CLOSER, CHECK BAND (2)", "AND THE ANTENNA",
-    "HEARD IT, BUT NO RSSI RISE", "MOVE CLOSER AND RETRY", "",
-    "RF SEEN, SLICER MISSED IT", "PRESS * FOR FSK/OOK, RETRY", "",
-    "RF SEEN, BUT NOTHING HEARD", "CHECK F, PRESS * FOR DEMOD", "",
-};
 
 static struct {
     const app_api_t *A;
@@ -165,6 +156,20 @@ static char *put(char *o, const char *s)
         *o++ = *s++;
     }
     return o;
+}
+/**
+ * Append a text from the packed assets.
+ *
+ * @param o Cursor to write at.
+ * @param off Asset offset of the text, a T_ constant.
+ * @return Cursor after the copied text.
+ */
+__attribute__((noinline))
+static char *putT(char *o, uint16_t off)
+{
+    char t[TEXT_MAX];
+    g.A->asset_read(off, t, TEXT_MAX);
+    return put(o, t);
 }
 /**
  * Append a signed decimal via the firmware formatter.
@@ -412,22 +417,19 @@ static void spikeTick(void)
     g.rbQ += (r - g.rbQ) >> ((now - g.t0 < SEED_MS) ? 2 : 6);
 }
 
-/* Speaker: box, cone, one sound wave. 7 status columns, LSB is the top pixel. */
-static const uint8_t SPK_ICON[7] = {
-    0x1Cu, 0x1Cu, 0x3Eu, 0x7Fu, 0x00u, 0x22u, 0x1Cu
-};
-
 /**
  * Draw the status line: DBG, band, demod, speaker icon, and battery.
  */
 static void drawStatus(void)
 {
     char str[16];
-    char *o = puti(str, g.band433 ? 433 : 315);
+    char *o = putT(str, T_DBG);
     unsigned w;
     g.A->status_clear();
     g.A->draw_battery();
-    g.A->print_inverse("DBG", 2, 0, true, true, 14);
+    *o = '\0';
+    g.A->print_inverse(str, 2, 0, true, true, 14);
+    o = puti(str, g.band433 ? 433 : 315);
     *o++ = '.';
     if (g.band433) {
         *o++ = '9';
@@ -446,7 +448,7 @@ static void drawStatus(void)
     g.A->print_tiny(str, (uint8_t)(128u - 48u - w), 1, true, true);
     /* The icon ends where the band text ends, just left of the battery. */
     if (g.spk && g.A->status_line)
-        memcpy(g.A->status_line + (128u - 48u) - sizeof SPK_ICON, SPK_ICON, sizeof SPK_ICON);
+        g.A->asset_read(SPK_ICON, g.A->status_line + (128u - 48u) - SPK_ICON_LEN, SPK_ICON_LEN);
 }
 
 /**
@@ -472,45 +474,45 @@ static void drawWiz(void)
 {
     char str[34];
     char *o;
-    const char *a = "HEARD A BURST?";
-    const char *b = "";
-    const char *c = "";
+    /* Asset offsets of the three body rows. */
+    uint16_t a = T_HEARD;
+    uint16_t b = T_NONE;
+    uint16_t c = T_NONE;
     uint32_t now = g.A->ticks_ms();
 
     if (g.wiz == WZ_HISS) {
-        a = "SPEAKER ON. HEAR HISS?";
+        a = T_HISS;
     } else if (g.wiz == WZ_WAKE) {
-        a = "WAKE A SENSOR NOW";
-        b = "MENU WHEN DONE";
+        a = T_WAKE;
+        b = T_DONE;
     } else if (g.wiz == WZ_DONE) {
-        const char *const *v = VERDICT + verdict() * 3u;
-        a = v[0];
-        b = v[1];
-        c = v[2];
+        a = (uint16_t)(T_VERDICT + verdict() * (3u * T_VERDICT_STRIDE));
+        b = (uint16_t)(a + T_VERDICT_STRIDE);
+        c = (uint16_t)(b + T_VERDICT_STRIDE);
     }
-    o = put(str, a);
+    o = putT(str, a);
     tiny(str, 0, 0, o);
-    o = put(str, b);
+    o = putT(str, b);
     tiny(str, 0, 8, o);
-    o = put(str, c);
+    o = putT(str, c);
     tiny(str, 0, 16, o);
 
     if (g.wiz == WZ_WAKE) {
-        o = put(str, "W");
+        o = putT(str, T_W);
         o = puti(o, (uint8_t)(g.wakes - g.w0));
-        o = put(o, " N");
+        o = putT(o, T_N);
         o = puti(o, (uint8_t)(g.bursts - g.n0));
-        o = put(o, "  ");
+        o = putT(o, T_GAP);
         o = puti(o, (int32_t)((WAKE_MS - (now - g.wizAt)) / 1000u));
-        o = put(o, "S LEFT");
+        o = putT(o, T_LEFT);
         tiny(str, 0, 32, o);
     } else if (g.wiz == WZ_DONE) {
-        o = put(str, "MENU OR EXIT TO CLOSE");
+        o = putT(str, T_CLOSE);
         tiny(str, 0, 48, o);
     } else {
-        o = put(str, g.wizSel ? "   YES  > NO" : " > YES    NO");
+        o = putT(str, (uint16_t)(T_YESNO + g.wizSel * T_YESNO_STRIDE));
         tiny(str, 0, 32, o);
-        o = put(str, "ARROWS PICK, MENU OK");
+        o = putT(str, T_PICK);
         tiny(str, 0, 48, o);
     }
 }
@@ -624,9 +626,9 @@ static void draw(void)
     *o++ = ' ';
     o = puti(o, g.rssiPk);
     /* Worst stall in us. Over ~26 us (one sample) the list apps lose time. */
-    o = put(o, " K");
+    o = putT(o, T_K);
     o = puti(o, (int32_t)(g.cKey / 48u));
-    o = put(o, " S");
+    o = putT(o, T_S);
     o = puti(o, (int32_t)(g.cRssi / 48u));
     tiny(str, 0, 0, o);
 
@@ -658,13 +660,13 @@ static void draw(void)
     o = str;
     *o++ = 'T';
     o = puti(o, (int32_t)((now - g.t0) / 1000u));
-    o = put(o, " Rb");
+    o = putT(o, T_RB);
     o = puti(o, g.rbQ >> 4);
-    o = put(o, " W");
+    o = putT(o, T_SW);
     o = puti(o, g.wakes);
-    o = put(o, " M");
+    o = putT(o, T_M);
     o = puti(o, g.matched);
-    o = put(o, " L");
+    o = putT(o, T_L);
     if (g.wakes) o = puti(o, (int32_t)((now - g.lastHot) / 1000u));
     else *o++ = '-';
     tiny(str, 0, 24, o);

@@ -45,6 +45,8 @@ C_FILES = (
 )
 PY_FILES = (
     "gen_assets.py",
+    "gen_dbg_assets.py",
+    "gen_cap_assets.py",
     "test/test_style.py",
     "test/test_variants.py",
     "tools/mock_lcd.py",
@@ -61,6 +63,8 @@ MIN_C = {
 }
 MIN_PY = {
     "gen_assets.py": 0,
+    "gen_dbg_assets.py": 0,
+    "gen_cap_assets.py": 0,
     "test/test_style.py": 17,
     "test/test_variants.py": 9,
     "tools/mock_lcd.py": 19,

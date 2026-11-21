@@ -21,9 +21,13 @@ python3 tools/fetch_sdk.py   # downloads the F4HWN app SDK into sdk/
 - Redraw the screen pictures in `docs/`: `python3 tools/mock_lcd.py`.
 - The release version is `APP_VER` in `build.sh`.
 
-Code sizes in v1.3.2 (each app must fit the 4 KB app space): `TPMS EU` 4088 B,
-`TPMS NA` 4088 B, `TPMS EU2` 3756 B, `TPMS NA2` 3824 B, `TPMS DBG` 4068 B,
-`TPMS CAP` 4096 B. `TPMS EU3` (added after v1.3.2) is 3772 B.
+Code sizes now (each app must fit the 4 KB app space, `.bss` included):
+`TPMS EU` 4084 B, `TPMS NA` 4080 B, `TPMS EU2` 3784 B, `TPMS NA2` 3856 B,
+`TPMS EU3` 3760 B, `TPMS DBG` 3348 B, `TPMS CAP` 3840 B.
+
+Screen text lives in the app's assets, not its code: `gen_assets.py` for the
+list apps, `gen_dbg_assets.py` and `gen_cap_assets.py` for TPMS DBG and TPMS CAP.
+The apps read it with `asset_read`, so a new string costs no overlay bytes.
 
 ## See also
 

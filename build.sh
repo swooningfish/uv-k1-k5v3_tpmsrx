@@ -97,6 +97,8 @@ fi
 if [ "$WANT_DBG" = 1 ]; then
   CUR="TPMS DBG"
   printf '  🔨 %-12s\n' "$CUR"
+  SDK="$SDK" "$PYTHON" ./gen_dbg_assets.py \
+      "${OUT_DIR}/tpmsdbg_assets.bin" "${OUT_DIR}/tpmsdbg_assets.h"
   "$CC" $CFLAGS \
       -nostdlib -nostartfiles -T app.ld -Wl,--defsym,APP_VMA=${APP_VMA} \
       -Wl,--gc-sections -Wl,-Map="${OUT_DIR}/tpms_dbg.map" \
@@ -105,7 +107,8 @@ if [ "$WANT_DBG" = 1 ]; then
   "$OBJCOPY" -O binary "${OUT_DIR}/tpms_dbg.elf" "${OUT_DIR}/tpms_dbg.bin"
   "$PYTHON" "$SDK/pack_app.py" "${OUT_DIR}/tpms_dbg.bin" "${OUT_DIR}/TPMSDBG.app" \
       --name "TPMS DBG" --ver "$APP_VER" --api-min "$APP_API_MIN" \
-      --vma "${APP_VMA}" --shortcut none >/dev/null
+      --vma "${APP_VMA}" --shortcut none \
+      --assets "${OUT_DIR}/tpmsdbg_assets.bin" >/dev/null
   BYTES=$(wc -c < "${OUT_DIR}/tpms_dbg.bin")
   if [ "$BYTES" -gt 4096 ]; then
       printf '  🚨 %-12s OVERFLOWS 4 KiB (%d B)\n' "$CUR" "$BYTES"
@@ -116,18 +119,25 @@ if [ "$WANT_DBG" = 1 ]; then
 fi
 if [ "$WANT_CAP" = 1 ]; then
   CUR="TPMS CAP"
-  printf '  🔨 %-12s
-' "$CUR"
-  "$CC" $CFLAGS       -nostdlib -nostartfiles -T app.ld -Wl,--defsym,APP_VMA=${APP_VMA}       -Wl,--gc-sections -Wl,-Map="${OUT_DIR}/tpms_cap.map"       -Wl,--build-id=none -Wl,--no-warn-rwx-segments       tpmscap_app.c -lgcc -o "${OUT_DIR}/tpms_cap.elf"
+  printf '  🔨 %-12s\n' "$CUR"
+  SDK="$SDK" "$PYTHON" ./gen_cap_assets.py \
+      "${OUT_DIR}/tpmscap_assets.bin" "${OUT_DIR}/tpmscap_assets.h"
+  "$CC" $CFLAGS \
+      -nostdlib -nostartfiles -T app.ld -Wl,--defsym,APP_VMA=${APP_VMA} \
+      -Wl,--gc-sections -Wl,-Map="${OUT_DIR}/tpms_cap.map" \
+      -Wl,--build-id=none -Wl,--no-warn-rwx-segments \
+      tpmscap_app.c -lgcc -o "${OUT_DIR}/tpms_cap.elf"
   "$OBJCOPY" -O binary "${OUT_DIR}/tpms_cap.elf" "${OUT_DIR}/tpms_cap.bin"
-  "$PYTHON" "$SDK/pack_app.py" "${OUT_DIR}/tpms_cap.bin" "${OUT_DIR}/TPMSCAP.app"       --name "TPMS CAP" --ver "$APP_VER" --api-min "$APP_API_MIN"       --vma "${APP_VMA}" --shortcut none >/dev/null
+  "$PYTHON" "$SDK/pack_app.py" "${OUT_DIR}/tpms_cap.bin" "${OUT_DIR}/TPMSCAP.app" \
+      --name "TPMS CAP" --ver "$APP_VER" --api-min "$APP_API_MIN" \
+      --vma "${APP_VMA}" --shortcut none \
+      --assets "${OUT_DIR}/tpmscap_assets.bin" >/dev/null
   BYTES=$(wc -c < "${OUT_DIR}/tpms_cap.bin")
   if [ "$BYTES" -gt 4096 ]; then
-      printf '  🚨 %-12s OVERFLOWS 4 KiB (%d B)
-' "$CUR" "$BYTES"
+      printf '  🚨 %-12s OVERFLOWS 4 KiB (%d B)\n' "$CUR" "$BYTES"
       exit 1
   fi
-  printf '  ✅ %-12s %4d B  (%d%% of 4 KiB)  ->  %s/TPMSCAP.app
-'          "$CUR" "$BYTES" "$(( BYTES * 100 / 4096 ))" "$OUT_DIR"
+  printf '  ✅ %-12s %4d B  (%d%% of 4 KiB)  ->  %s/TPMSCAP.app\n' \
+         "$CUR" "$BYTES" "$(( BYTES * 100 / 4096 ))" "$OUT_DIR"
 fi
 trap - ERR

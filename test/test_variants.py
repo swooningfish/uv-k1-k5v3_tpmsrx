@@ -248,7 +248,7 @@ def test_cap_app() -> None:
           "the offset slider covers the radio's -40 to +35 kHz in 5 kHz steps")
     for mark in ("MARK_GAP", "MARK_SET", "MARK_HIT"):
         check(f"#define {mark}" in src and mark in tool, f"{mark} shared with kplug.html")
-    check("const BAUD = 115200;" in tool and "K-PLUG 115200:" in src,
+    check("const BAUD = 115200;" in tool and "K-PLUG 115200:" in read("gen_cap_assets.py"),
           "both ends use 115200 baud")
 
 

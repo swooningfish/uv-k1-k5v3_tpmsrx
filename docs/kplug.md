@@ -197,11 +197,11 @@ So for testing:
 | `F` | Step back: the next `*` or `3` goes to the previous setting. It applies to the next key only; press `F` again to cancel. See [Stepping back with F](../README.md#stepping-back-with-f) |
 | `UP` / `DOWN` | Tuning offset 5 kHz up or down (`RIGHT` / `LEFT` on the UV-K1) |
 | `1` | Speaker on or off |
-| `0` | Force backlight on or off, as in `TPMS EU`. While forced, a light bulb shows on the status line. Otherwise the screen goes dark 10 s after the last key, and the first `EXIT` only lights it. Saved on exit |
+| `0` | Force backlight on or off, as in `TPMS EU`. While forced, a light bulb shows on the status line. Otherwise the screen goes dark 10 s after the last key, and the first `EXIT` only lights it. Saved |
 | `5` | Clear the counters |
 | `EXIT` | Quit. The K-plug goes back to 38400 baud |
 
-Band, demod, preset, offset, SENS and the backlight option are saved on exit. They are separate from the
+Band, demod, preset, offset, SENS and the backlight option are saved as they change. They are separate from the
 `TPMS EU` / `TPMS NA` settings.
 
 ## Reading the log

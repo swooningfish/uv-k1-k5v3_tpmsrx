@@ -634,6 +634,25 @@ static bool handleKey(uint8_t key, dectpms_t *dec)
 }
 
 /**
+ * Stage the settings with the firmware.
+ *
+ * Called on every redraw, which follows every key and serial command: from
+ * firmware v7.0.0 a radio switched off inside the app restarts it with the
+ * last staged settings. Unchanged bytes cost nothing.
+ */
+__attribute__((noinline))
+static void saveCfg(void)
+{
+    uint8_t cfg[4];
+
+    cfg[0] = CFG_MAGIC;
+    cfg[1] = (uint8_t)(g.band433 | (g.light ? CFG_LIGHT : 0u) | (g.ook ? CFG_OOK : 0u));
+    cfg[2] = (uint8_t)(g.ifp | (g.sens << 2));
+    cfg[3] = g.foff;
+    g.A->cfg_save(cfg, 4);
+}
+
+/**
  * Sample, slice and stream until EXIT.
  */
 __attribute__((noinline))
@@ -720,6 +739,7 @@ static void capture(void)
         if (wantUi) {
             g.drawDue = 0;
             wantUi = false;
+            saveCfg();
             g.A->battery_sample();
             draw(&dec);
             /* Sampling stopped while the screen was drawn. */
@@ -787,9 +807,5 @@ void app_main(const app_api_t *api)
     api->audio_path(false);
     api->led(false);
 
-    cfg[0] = CFG_MAGIC;
-    cfg[1] = (uint8_t)(g.band433 | (g.light ? CFG_LIGHT : 0u) | (g.ook ? CFG_OOK : 0u));
-    cfg[2] = (uint8_t)(g.ifp | (g.sens << 2));
-    cfg[3] = g.foff;
-    api->cfg_save(cfg, 4);
+    saveCfg();
 }

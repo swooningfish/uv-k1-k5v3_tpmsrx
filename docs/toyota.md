@@ -2,7 +2,7 @@
 
 `TPMS EU` and `TPMS NA` have two radio settings for testing Toyota (and Ford)
 reception. `TPMS EU3` has the same two for Renault and Ford (see
-[TPMS EU3: the RENA count](#tpms-eu3-the-rena-count)). Both are saved on exit. Changing either one, or the band, retunes
+[TPMS EU3: the RENA count](#tpms-eu3-the-rena-count)). Both are saved as they change. Changing either one, or the band, retunes
 the radio and resets the test line.
 
 Before any sensor is listed, the line under the cars shows them:
@@ -39,7 +39,7 @@ On the UV-K1, `UP` / `DOWN` are `RIGHT` / `LEFT`.
 | Stays near 0–12 | No Toyota preamble heard | `2` if the band may be wrong. Then `UP` once (`5K`), `DOWN` twice (`-5K`), `DOWN` once (`-10K`), `UP` three times (`10K`). Back at `0K`, `*` to try each preset |
 | Rises to 20–70 | Bursts are heard but break up | `UP` / `DOWN` to find the offset with the highest count. At that offset, `*` to step through `7E28`, `7E0C` and `7E08` |
 | Reaches 72, no row | Whole frames decode but fail the CRC | Bit errors near the end, or a sensor that only looks like this Toyota format. At the best preset, `UP` and `DOWN` one step each way |
-| A `TOYT` row appears | Working | None. Note the offset and preset on the test line; they are saved on exit |
+| A `TOYT` row appears | Working | None. Note the offset and preset on the test line; they are saved |
 
 The test line only shows while the list is empty. If another sensor fills a
 row, `MENU` then `CLEAR` brings it back. To return to the defaults, press

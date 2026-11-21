@@ -847,6 +847,29 @@ static bool serviceDisp(uint32_t now)
 }
 
 /**
+ * Stage the settings with the firmware.
+ *
+ * Called after every key, not only on EXIT: from firmware v7.0.0 a radio
+ * switched off inside the app restarts it with the last staged settings.
+ * Unchanged bytes cost nothing.
+ */
+__attribute__((noinline))
+static void saveCfg(void)
+{
+    uint8_t cfg[4];
+
+    cfg[0] = CFG_MAGIC;
+    cfg[1] = g.cfg.band433;
+#if TPMS_HAVE_FSK
+    cfg[2] = (uint8_t)(g.cfg.sens | (g.cfg.ifp << 2) | (g.cfg.foff << 4));
+#else
+    cfg[2] = g.cfg.sens;
+#endif
+    cfg[3] = g.cfg.disp;
+    g.A->cfg_save(cfg, 4);
+}
+
+/**
  * Sample audio until EXIT, decoding packets and refreshing the screen.
  *
  * @param ui Packed UI strings for this flavour.
@@ -929,6 +952,7 @@ static void listen(const char *ui)
                IF key steps back. A second F cancels it, any other key uses
                it up. handleKey ignores F itself. */
             g.fn = (uint8_t)((key == APP_KEY_F) & (g.fn ^ 1u));
+            saveCfg();
             wantUi = true;
         }
 
@@ -1036,13 +1060,5 @@ void app_main(const app_api_t *api)
     api->audio_path(false);
     api->led(false);
 
-    cfg[0] = CFG_MAGIC;
-    cfg[1] = g.cfg.band433;
-#if TPMS_HAVE_FSK
-    cfg[2] = (uint8_t)(g.cfg.sens | (g.cfg.ifp << 2) | (g.cfg.foff << 4));
-#else
-    cfg[2] = g.cfg.sens;
-#endif
-    cfg[3] = g.cfg.disp;
-    api->cfg_save(cfg, 4);
+    saveCfg();
 }

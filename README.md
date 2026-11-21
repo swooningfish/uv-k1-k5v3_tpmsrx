@@ -55,7 +55,7 @@ flavour flag, so there are no separate regional code trees.
 ## Install
 
 You need a UV-K1 or UV-K5 V3 running F4HWN Labs or Fusion with overlay apps
-(app API level 3 or higher; tested against the v6.3.0 SDK). The apps can be
+(app API level 3 or higher; built against the v7.0.0 SDK). The apps can be
 installed side by side, one per free slot.
 
 1. Download the zip for your app from the
@@ -83,7 +83,7 @@ installed side by side, one per free slot.
 | `*` | Next IF / demod preset (FSK apps: `TPMS EU`, `TPMS NA` and `TPMS EU3`). `F` then `*` goes back one. See [Toyota test settings](docs/toyota.md) |
 | `F` | Step back: the next `SENS` change or `*` goes to the previous setting instead of the next. See [Stepping back with F](#stepping-back-with-f) |
 | `UP` / `DOWN` | Move the tuning 5 kHz up or down (FSK apps only; the navigation keys on the UV-K1). See [Toyota test settings](docs/toyota.md) |
-| `0` | Force backlight on or off. While forced, the screen stays lit and a light bulb shows on the status line. Off goes back to lighting the screen for 10 seconds after each key. Saved on exit |
+| `0` | Force backlight on or off. While forced, the screen stays lit and a light bulb shows on the status line. Off goes back to lighting the screen for 10 seconds after each key. Saved |
 | `EXIT` | Quit, or close the menu. Once the screen has gone dark, the first press only lights it |
 
 With the speaker on you hear what the decoder hears. Hiss means the receiver
@@ -99,12 +99,17 @@ A good decode blinks the green LED, even with the backlight off.
 | Item | What it does |
 |---|---|
 | `BAND` | `315.00` / `433.92`. Only in `TPMS EU` and `TPMS NA` |
-| `SENS` | Sensitivity: `LOW` / `MID` / `HIGH` (default `MID`). `HIGH` hears weaker, more distant sensors; `LOW` ignores more noise and far-off cars. Saved on exit |
+| `SENS` | Sensitivity: `LOW` / `MID` / `HIGH` (default `MID`). `HIGH` hears weaker, more distant sensors; `LOW` ignores more noise and far-off cars. Saved |
 | `CLEAR` | Wipe the list |
 
 `UP` / `DOWN` (the navigation keys on the UV-K1) select an item. `MENU`, `2`
 or `5` change it. `EXIT` closes the menu. The menu also shows the app version.
 Decoding pauses while the menu is open, so a sensor that sends then is missed.
+
+Settings are saved as soon as they change. On F4HWN v7.0.0 or later, a radio
+switched off inside the app starts it again at the next power-on with those
+settings (hold any key while switching on to skip that). A change made less
+than 2 seconds before switching off can be lost.
 
 ### Stepping back with F
 
